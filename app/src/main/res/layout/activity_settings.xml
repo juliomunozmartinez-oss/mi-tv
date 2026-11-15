@@ -138,7 +138,7 @@
             android:id="@+id/btnUpdate"
             style="@style/Btn"
             android:layout_marginTop="12dp"
-            android:text="Buscar actualizaciones de Muga TV" />
+            android:text="Buscar actualizaciones de MuGa TV" />
 
         <TextView
             android:id="@+id/btnRefresh"

@@ -86,7 +86,7 @@ object Updater {
     private fun offer(activity: Activity, scope: LifecycleCoroutineScope, r: Release) {
         val mb = if (r.sizeBytes > 0) " (%.0f MB)".format(r.sizeBytes / 1_048_576.0) else ""
         AlertDialog.Builder(activity)
-            .setTitle("Hay una versión nueva de Muga TV")
+            .setTitle("Hay una versión nueva de MuGa TV")
             .setMessage(
                 "Tienes la build ${BuildConfig.BUILD_NUMBER} y ya está la build ${r.build}$mb.\n\n" +
                     "Se instala encima: no se pierden perfiles, listas ni «Seguir viendo»."
@@ -145,13 +145,13 @@ object Updater {
     }
 
     private fun install(activity: Activity, file: File) {
-        // Android pide permiso una vez para que Muga TV pueda instalar su propia actualización.
+        // Android pide permiso una vez para que MuGa TV pueda instalar su propia actualización.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
             AlertDialog.Builder(activity)
                 .setTitle("Falta un permiso (solo la primera vez)")
                 .setMessage(
-                    "Activa «Permitir de esta fuente» para Muga TV y luego vuelve a tocar «Actualizar ahora».\n\n" +
-                        "Si no se abre solo: Ajustes → Apps → Seguridad y restricciones → Fuentes desconocidas → Muga TV."
+                    "Activa «Permitir de esta fuente» para MuGa TV y luego vuelve a tocar «Actualizar ahora».\n\n" +
+                        "Si no se abre solo: Ajustes → Apps → Seguridad y restricciones → Fuentes desconocidas → MuGa TV."
                 )
                 .setPositiveButton("Abrir ajustes") { _, _ ->
                     try {

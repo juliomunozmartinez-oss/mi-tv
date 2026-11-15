@@ -14,7 +14,7 @@ class MiTvApp : Application() {
             runCatching {
                 val sw = StringWriter()
                 error.printStackTrace(PrintWriter(sw))
-                val text = "Muga TV ${BuildConfigInfo.version(this)} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +
+                val text = "MuGa TV ${BuildConfigInfo.version(this)} · ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n" +
                     sw.toString().lineSequence().take(25).joinToString("\n")
                 getSharedPreferences("crash", Context.MODE_PRIVATE).edit().putString("last", text).commit()
             }

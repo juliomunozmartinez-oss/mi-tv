@@ -1,4 +1,4 @@
-# Muga TV
+# MuGa TV
 
 Reproductor IPTV propio para Android TV / Chromecast con Google TV.
 Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + contraseña).
