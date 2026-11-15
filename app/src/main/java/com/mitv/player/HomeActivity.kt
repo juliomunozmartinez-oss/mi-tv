@@ -31,7 +31,7 @@ import java.util.Locale
 class HomeActivity : AppCompatActivity() {
 
     private enum class Tab(val label: String) {
-        HOME("Inicio"), LIVE("TV en vivo"), MOVIES("Películas"), SERIES("Series"), SEARCH("Buscar")
+        HOME("Inicio"), LIVE("TV en vivo"), MOVIES("Películas"), SERIES("Series"), MYLIST("Mi lista"), SEARCH("Buscar")
     }
 
     /** El título destacado de cada pestaña (el que tiene botones «Ver» y «Más información»). */
@@ -173,7 +173,7 @@ class HomeActivity : AppCompatActivity() {
         }
         if (Catalog.loadedKey == prefs.accountKey && view != null) {
             // Volvimos de ver algo: refrescar «Seguir viendo» y recomendaciones si cambió.
-            if (tab == Tab.HOME && homeSignature() != renderedSignature) render()
+            if ((tab == Tab.HOME || tab == Tab.MYLIST) && homeSignature() != renderedSignature) render()
             return
         }
         loading.visibility = View.VISIBLE
@@ -385,49 +385,68 @@ class HomeActivity : AppCompatActivity() {
 
                 list += recommendedRows(v)
 
-                val myList = store.myList.filter(v::canSee).mapNotNull { key ->
-                    val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-                    when (type) {
-                        "movie" -> Catalog.movieById[id]?.let(::movieCard)
-                        "series" -> Catalog.seriesById[id]?.let(::seriesCard)
-                        "live" -> Catalog.liveById[id]?.let(::liveCard)
-                        else -> null
-                    }
-                }
-                if (myList.isNotEmpty()) list += Row("Mi lista", myList, wide = false)
+                val mine = myListCards(v)
+                if (mine.isNotEmpty()) list += row("Mi lista", mine, false)
 
                 val liveTitle = if (profile.kids) "Canales infantiles" else "Canales de México"
                 val liveSource = if (profile.kids) v.live else v.mexicoLive.ifEmpty { v.live }
-                if (liveSource.isNotEmpty()) list += Row(liveTitle, liveSource.take(40).map(::liveCard), wide = true)
+                if (liveSource.isNotEmpty()) list += row(liveTitle, liveSource, true, ::liveCard)
 
-                val recentMovies = v.recentMovies.take(30)
-                if (recentMovies.isNotEmpty()) list += Row("Películas recién agregadas", recentMovies.map(::movieCard), false)
-                val recentSeries = v.recentSeries.take(30)
-                if (recentSeries.isNotEmpty()) list += Row("Series con episodios nuevos", recentSeries.map(::seriesCard), false)
+                if (v.recentMovies.isNotEmpty()) list += row("Películas recién agregadas", v.recentMovies, false, ::movieCard)
+                if (v.recentSeries.isNotEmpty()) list += row("Series con episodios nuevos", v.recentSeries, false, ::seriesCard)
 
-                v.movieGenres.take(3).forEach { (name, items) -> list += Row("Películas: $name", items.map(::movieCard), false) }
-                v.seriesGenres.take(2).forEach { (name, items) -> list += Row("Series: $name", items.map(::seriesCard), false) }
-                hero = pickMovieHero(recentMovies) ?: pickSeriesHero(recentSeries)
+                v.movieGenres.take(3).forEach { (name, items) ->
+                    list += genreRow("Películas: $name", items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
+                }
+                v.seriesGenres.take(2).forEach { (name, items) ->
+                    list += genreRow("Series: $name", items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }
+                }
+                hero = pickMovieHero(v.recentMovies.take(30)) ?: pickSeriesHero(v.recentSeries.take(30))
             }
             Tab.LIVE -> v.liveCats.forEach { c ->
                 val items = v.liveIn(c.id)
-                if (items.isNotEmpty()) list += Row(c.name, items.map(::liveCard), wide = true)
+                if (items.isNotEmpty()) list += row(c.name, items, true, ::liveCard)
             }
             Tab.MOVIES -> {
-                v.movieGenres.forEach { (name, items) -> list += Row(name, items.map(::movieCard), false) }
+                v.movieGenres.forEach { (name, items) ->
+                    list += genreRow(name, items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
+                }
                 v.vodCats.forEach { c ->
                     val items = v.moviesIn(c.id)
-                    if (items.isNotEmpty()) list += Row(c.name, items.map(::movieCard), false)
+                    if (items.isNotEmpty()) list += row(c.name, items, false, ::movieCard)
                 }
                 hero = pickMovieHero(v.recentMovies.take(20))
             }
             Tab.SERIES -> {
-                v.seriesGenres.forEach { (name, items) -> list += Row(name, items.map(::seriesCard), false) }
+                v.seriesGenres.forEach { (name, items) ->
+                    list += genreRow(name, items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }
+                }
                 v.seriesCats.forEach { c ->
                     val items = v.seriesIn(c.id)
-                    if (items.isNotEmpty()) list += Row(c.name, items.map(::seriesCard), false)
+                    if (items.isNotEmpty()) list += row(c.name, items, false, ::seriesCard)
                 }
                 hero = pickSeriesHero(v.recentSeries.take(20))
+            }
+            Tab.MYLIST -> {
+                renderedSignature = homeSignature()
+                val mine = myListCards(v)
+                val series = mine.filter { it.kind == Kind.SERIES }
+                val movies = mine.filter { it.kind == Kind.MOVIE }
+                val live = mine.filter { it.kind == Kind.LIVE }
+                if (series.isNotEmpty()) list += row("Series", series, false)
+                if (movies.isNotEmpty()) list += row("Películas", movies, false)
+                if (live.isNotEmpty()) list += row("TV en vivo", live, true)
+                if (list.isEmpty()) {
+                    featured = null
+                    adapter.submit(emptyList())
+                    showFeatured()
+                    showMessage(
+                        "Aún no tienes nada en Mi lista.\n\n" +
+                            "En la ficha de una película o serie toca «+ Mi lista».\n" +
+                            "En TV en vivo, mantén presionado OK sobre el canal."
+                    )
+                    return
+                }
             }
             Tab.SEARCH -> {
                 featured = null
@@ -447,6 +466,35 @@ class HomeActivity : AppCompatActivity() {
         rows.scrollToPosition(0)
         showFeatured()
         hero?.let(::loadFeaturedDetails)
+    }
+
+    /** Fila con las primeras tarjetas y, si hay más, una tarjeta «Ver todo» al final. */
+    private fun row(title: String, cards: List<Card>, wide: Boolean): Row {
+        if (cards.size <= ROW_LIMIT) return Row(title, cards, wide)
+        return Row(title, cards.take(ROW_LIMIT) + moreCard(cards.first().kind), wide) { cards }
+    }
+
+    /** Igual, pero sin convertir en tarjetas todo el contenido hasta que se pida «Ver todo». */
+    private fun <T> row(title: String, items: List<T>, wide: Boolean, toCard: (T) -> Card): Row {
+        if (items.size <= ROW_LIMIT) return Row(title, items.map(toCard), wide)
+        val shown = items.take(ROW_LIMIT).map(toCard)
+        return Row(title, shown + moreCard(shown.first().kind), wide) { items.map(toCard) }
+    }
+
+    /** Fila por tipo: siempre ofrece «Ver todo», que busca en todo el catálogo. */
+    private fun genreRow(title: String, cards: List<Card>, all: () -> List<Card>): Row =
+        Row(title, cards.take(ROW_LIMIT) + moreCard(cards.first().kind), false, all)
+
+    private fun moreCard(kind: Kind) = Card(kind, "__more__", "Ver todo", image = null, more = true)
+
+    private fun myListCards(v: CatalogView): List<Card> = store.myList.filter(v::canSee).mapNotNull { key ->
+        val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        when (type) {
+            "movie" -> Catalog.movieById[id]?.let(::movieCard)
+            "series" -> Catalog.seriesById[id]?.let(::seriesCard)
+            "live" -> Catalog.liveById[id]?.let(::liveCard)
+            else -> null
+        }
     }
 
     /** «Porque viste…» y «Recomendado para ti», según lo que ha visto este perfil. */
@@ -576,4 +624,8 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    companion object {
+        private const val ROW_LIMIT = 20
+    }
 }

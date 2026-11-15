@@ -252,6 +252,19 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
             .take(40).toList()
     }.filter { it.second.size >= 4 }
 
+    /** Todas las películas/series de un tipo (para «Ver todo»). */
+    fun moviesOfGenre(name: String): List<Movie> {
+        val re = Genres.all.firstOrNull { it.first == name }?.second ?: return emptyList()
+        val catMatch = vodCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
+        return recentMovies.filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
+    }
+
+    fun seriesOfGenre(name: String): List<Series> {
+        val re = Genres.all.firstOrNull { it.first == name }?.second ?: return emptyList()
+        val catMatch = seriesCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
+        return recentSeries.filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
+    }
+
     val mexicoLive: List<LiveChannel> =
         liveCats.filter { Catalog.isMexico(it.name) }.flatMap { liveIn(it.id) }
 }

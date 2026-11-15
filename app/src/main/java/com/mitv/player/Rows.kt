@@ -19,9 +19,20 @@ data class Card(
     val logo: Boolean = false,
     val progress: Float = -1f,
     val resume: Resume? = null,
+    /** Tarjeta «Ver todo» al final de una fila. */
+    val more: Boolean = false,
 )
 
-data class Row(val title: String, val cards: List<Card>, val wide: Boolean)
+/**
+ * Una fila del carrusel. [all] da la sección completa para «Ver todo»
+ * (se calcula solo al abrirla, para no hacer trabajo de más).
+ */
+class Row(
+    val title: String,
+    val cards: List<Card>,
+    val wide: Boolean,
+    val all: (() -> List<Card>)? = null,
+)
 
 
 /** Tarjetas de una fila (pósters verticales o tarjetas anchas). */
@@ -62,6 +73,15 @@ class CardAdapter(
         holder.focusTarget.setOnClickListener {
             val pos = holder.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION) onClick(row, pos)
+        }
+        if (card.more) {
+            holder.fallback.text = "Ver todo  →"
+            holder.fallback.visibility = View.VISIBLE
+            holder.title?.text = ""
+            holder.subtitle?.visibility = View.GONE
+            holder.image.setImageDrawable(null)
+            holder.progress.visibility = View.GONE
+            return
         }
         holder.fallback.text = card.title
         holder.title?.text = card.title

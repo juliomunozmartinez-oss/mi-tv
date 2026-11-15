@@ -113,10 +113,20 @@ object Nav {
                 .putExtra(EXTRA_ID, seriesId).putExtra(EXTRA_EPISODE, episodeId).putExtra(EXTRA_START, startMs)
         )
 
+    /** Abre la sección completa de una fila en cuadrícula. */
+    fun openGrid(ctx: Context, profile: Profile, row: Row) {
+        GridActivity.pending = row
+        ctx.startActivity(Intent(ctx, GridActivity::class.java).putExtra(EXTRA_PROFILE, profile.id))
+    }
+
     /** Abre lo que representa una tarjeta. «Seguir viendo» reproduce directo. */
     fun open(ctx: Context, profile: Profile, row: Row, index: Int) {
         val card = row.cards.getOrNull(index) ?: return
         val r = card.resume
+        if (card.more) {
+            openGrid(ctx, profile, row)
+            return
+        }
         when {
             card.kind == Kind.LIVE -> {
                 val channels = row.cards.filter { it.kind == Kind.LIVE }.mapNotNull { Catalog.liveById[it.id] }
