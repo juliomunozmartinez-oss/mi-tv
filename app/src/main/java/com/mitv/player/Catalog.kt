@@ -214,8 +214,12 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
     val series = Catalog.series.filter { it.categoryId in seriesIds }
 
     private val liveByCat = live.groupBy { it.categoryId }
-    private val moviesByCat = movies.groupBy { it.categoryId }
-    private val seriesByCat = series.groupBy { it.categoryId }
+
+    /** Películas: lo más nuevo primero (como en las apps de streaming). */
+    private val moviesByCat = movies.sortedByDescending { it.added }.groupBy { it.categoryId }
+
+    /** Series: las mejor calificadas y con episodios recientes primero. */
+    private val seriesByCat = series.sortedByDescending { seriesScore(it) }.groupBy { it.categoryId }
 
     fun liveIn(catId: String) = liveByCat[catId].orEmpty()
     fun moviesIn(catId: String) = moviesByCat[catId].orEmpty()
@@ -236,6 +240,9 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
     val recentMovies: List<Movie> = movies.sortedByDescending { it.added }
     val recentSeries: List<Series> = series.sortedByDescending { it.updated }
 
+    /** Series ordenadas por calificación y novedad (para las secciones por tipo). */
+    private val rankedSeries: List<Series> = series.sortedByDescending { seriesScore(it) }
+
     /** Filas por tipo (Animación, Comedia…), con lo más reciente primero. */
     val movieGenres: List<Pair<String, List<Movie>>> = Genres.all.map { (name, re) ->
         // El nombre de cada categoría se revisa una sola vez; el género de cada título solo si existe.
@@ -247,7 +254,7 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
 
     val seriesGenres: List<Pair<String, List<Series>>> = Genres.all.map { (name, re) ->
         val catMatch = seriesCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
-        name to recentSeries.asSequence()
+        name to rankedSeries.asSequence()
             .filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
             .take(40).toList()
     }.filter { it.second.size >= 4 }
@@ -262,9 +269,21 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
     fun seriesOfGenre(name: String): List<Series> {
         val re = Genres.all.firstOrNull { it.first == name }?.second ?: return emptyList()
         val catMatch = seriesCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
-        return recentSeries.filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
+        return rankedSeries.filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
     }
 
     val mexicoLive: List<LiveChannel> =
         liveCats.filter { Catalog.isMexico(it.name) }.flatMap { liveIn(it.id) }
+
+    /**
+     * Puntuación para ordenar series: calificación (0–10) + hasta 10 puntos por novedad,
+     * que bajan poco a poco durante unos 10 meses desde el último episodio.
+     */
+    private fun seriesScore(s: Series): Double {
+        val ageDays = if (s.updated > 0) (nowSec - s.updated) / 86_400.0 else 3650.0
+        val freshness = (10.0 - ageDays / 30.0).coerceIn(0.0, 10.0)
+        return s.rating.coerceIn(0.0, 10.0) + freshness
+    }
+
+    private val nowSec: Long get() = System.currentTimeMillis() / 1000
 }

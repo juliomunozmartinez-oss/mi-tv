@@ -32,7 +32,42 @@ class Row(
     val cards: List<Card>,
     val wide: Boolean,
     val all: (() -> List<Card>)? = null,
-)
+) {
+    /** Último póster enfocado en esta fila, para volver justo a él al subir o bajar. */
+    var focusPos: Int = 0
+}
+
+/**
+ * Fila horizontal que recuerda su póster enfocado. Al llegar desde arriba o desde abajo
+ * solo ofrece ese póster, así el foco no se «recorre» hacia un lado.
+ */
+class RowRecyclerView @JvmOverloads constructor(
+    context: android.content.Context,
+    attrs: android.util.AttributeSet? = null,
+) : RecyclerView(context, attrs) {
+
+    var row: Row? = null
+
+    override fun addFocusables(views: java.util.ArrayList<View>, direction: Int, focusableMode: Int) {
+        if (!hasFocus() && (direction == View.FOCUS_UP || direction == View.FOCUS_DOWN)) {
+            val lm = layoutManager as? LinearLayoutManager
+            val pos = row?.focusPos ?: 0
+            val target = lm?.findViewByPosition(pos)
+                ?: lm?.findViewByPosition(lm.findFirstCompletelyVisibleItemPosition().coerceAtLeast(0))
+            if (target != null) {
+                target.addFocusables(views, direction, focusableMode)
+                return
+            }
+        }
+        super.addFocusables(views, direction, focusableMode)
+    }
+
+    override fun requestChildFocus(child: View?, focused: View?) {
+        super.requestChildFocus(child, focused)
+        val pos = child?.let { getChildAdapterPosition(it) } ?: NO_POSITION
+        if (pos != NO_POSITION) row?.focusPos = pos
+    }
+}
 
 
 /** Tarjetas de una fila (pósters verticales o tarjetas anchas). */
@@ -141,7 +176,7 @@ class RowsAdapter(
 
     class RowVH(view: View) : RecyclerView.ViewHolder(view) {
         val title: TextView = view.findViewById(R.id.rowTitle)
-        val list: RecyclerView = view.findViewById(R.id.rowList)
+        val list: RowRecyclerView = view.findViewById(R.id.rowList)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RowVH {
@@ -157,6 +192,9 @@ class RowsAdapter(
     override fun onBindViewHolder(holder: RowVH, position: Int) {
         val row = rows[position]
         holder.title.text = row.title
+        holder.list.row = row
         holder.list.adapter = CardAdapter(row, onCard, onFocus)
+        // Al volver a mostrar la fila, conservar dónde se quedó.
+        (holder.list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(row.focusPos, 0)
     }
 }
