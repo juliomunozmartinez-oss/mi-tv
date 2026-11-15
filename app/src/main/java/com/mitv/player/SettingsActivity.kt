@@ -52,6 +52,25 @@ class SettingsActivity : AppCompatActivity() {
                 finish()
             }
         }
+        findViewById<TextView>(R.id.btnProfiles).setOnClickListener {
+            startActivity(android.content.Intent(this, ProfilesEditActivity::class.java))
+        }
+        findViewById<TextView>(R.id.btnCategories).setOnClickListener {
+            if (!prefs.isConfigured) {
+                show("Primero guarda tu servidor, usuario y contraseña.", ok = false)
+            } else {
+                startActivity(android.content.Intent(this, CategoriesActivity::class.java))
+            }
+        }
+        val btnPreview = findViewById<TextView>(R.id.btnPreview)
+        fun previewLabel() {
+            btnPreview.text = "Avance automático: " + if (prefs.autoPreview) "Sí" else "No"
+        }
+        previewLabel()
+        btnPreview.setOnClickListener {
+            prefs.autoPreview = !prefs.autoPreview
+            previewLabel()
+        }
         findViewById<TextView>(R.id.btnKids).setOnClickListener {
             if (!prefs.isConfigured) {
                 show("Primero guarda tu servidor, usuario y contraseña.", ok = false)
@@ -82,7 +101,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updatePin() {
         if (prefs.pinEnabled) {
-            pinStatus.text = "Activado: se pide al entrar a Jenny, Julio y Ajustes."
+            pinStatus.text = "Activado: se pide al entrar a perfiles de adultos y a Ajustes."
             btnPin.text = "Desactivar PIN"
             pinInput.visibility = android.view.View.GONE
         } else {

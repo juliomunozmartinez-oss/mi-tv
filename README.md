@@ -6,7 +6,7 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 > Tus datos de acceso **no** están en este código: se escriben dentro de la app,
 > en la pantalla **Ajustes**, y se guardan solo en tu tele.
 
-## Qué hace (versión 2)
+## Qué hace (versión 3)
 - **Perfiles**: Jenny y Julio (adultos), Cam y Maju (infantiles). PIN opcional para adultos, apagado de inicio.
 - **Inicio estilo streaming**: un destacado grande arriba y filas de pósters: Seguir viendo, Mi lista,
   Canales de México, Películas recién agregadas, Series con episodios nuevos y categorías.
@@ -17,6 +17,13 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 - **Perfiles infantiles**: solo ven las categorías permitidas. Se detectan solas por nombre
   (Infantil, Kids, Niños, Animación…) y se ajustan en **Ajustes → Elegir categorías infantiles**.
 - **TV en vivo**: categorías de México primero; ▲ ▼ cambian de canal; mantener OK agrega a Mi lista.
+- **Secciones por tipo**: Animación, Acción y aventura, Comedia, Terror y suspenso, Ciencia ficción, Romance,
+  Documentales y Para toda la familia (por género del título o nombre de su categoría).
+- **Avance automático**: al pasar por un póster, arriba se ve su imagen, datos y sinopsis (se apaga en Ajustes).
+- **Recomendado para ti** y **Porque viste…**, según lo que ve cada perfil.
+- **Guía de programación** en TV en vivo: qué pasa ahora y qué sigue (si el proveedor la tiene).
+- **Ajustes → Perfiles**: renombrar, color, infantil/adulto, agregar (hasta 8) y borrar.
+- **Ajustes → Ordenar y ocultar categorías** para los perfiles de adultos.
 - Diseño propio, azul oscuro y minimalista. No usa logotipos ni diseños de otras plataformas.
 
 ## Instalar en el Chromecast
@@ -34,6 +41,3 @@ Cada versión nueva se instala encima de la anterior sin borrar tus favoritos.
 GitHub Actions compila el APK en cada `push` (`.github/workflows/build.yml`) y lo publica en **Releases**.
 Para compilar en tu computadora: `./gradlew assembleDebug` (necesita Android SDK y Java 17).
 
-## Ideas para después
-- Guía de programación (EPG) en TV en vivo.
-- Editar nombres y colores de perfiles desde la app.

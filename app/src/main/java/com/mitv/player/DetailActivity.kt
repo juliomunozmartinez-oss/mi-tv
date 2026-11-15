@@ -43,7 +43,7 @@ class DetailActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val p = Profiles.byId(intent.getStringExtra(Nav.EXTRA_PROFILE))
+        val p = Profiles.byId(this, intent.getStringExtra(Nav.EXTRA_PROFILE))
         val k = runCatching { Kind.valueOf(intent.getStringExtra(Nav.EXTRA_KIND) ?: "") }.getOrNull()
         val i = intent.getStringExtra(Nav.EXTRA_ID)
         if (p == null || k == null || i == null) {
@@ -113,7 +113,7 @@ class DetailActivity : AppCompatActivity() {
 
         loading.visibility = View.VISIBLE
         lifecycleScope.launch {
-            runCatching { prefs.client().movieDetail(movie) }
+            runCatching { Catalog.movieDetail(prefs.client(), movie) }
                 .onSuccess { d ->
                     title.text = d.name
                     plot.text = d.plot ?: ""
@@ -137,10 +137,7 @@ class DetailActivity : AppCompatActivity() {
 
         loading.visibility = View.VISIBLE
         lifecycleScope.launch {
-            runCatching {
-                Catalog.seriesDetails[id]
-                    ?: prefs.client().seriesDetail(id, series).also { Catalog.seriesDetails[id] = it }
-            }.onSuccess { d ->
+            runCatching { Catalog.seriesDetail(prefs.client(), id) }.onSuccess { d ->
                 seriesDetail = d
                 title.text = d.name
                 plot.text = d.plot ?: ""
@@ -203,11 +200,11 @@ class DetailActivity : AppCompatActivity() {
             )
         }
         val row = Row("Temporada $s", cards, wide = true)
-        episodesList.adapter = CardAdapter(row) { _, i ->
+        episodesList.adapter = CardAdapter(row, onClick = { _, i ->
             val ep = eps[i]
             val start = r?.takeIf { it.episodeId == ep.id }?.positionMs ?: 0L
             Nav.playEpisode(this, profile, id, ep.id, start)
-        }
+        })
         val idx = eps.indexOfFirst { it.id == r?.episodeId }
         if (idx > 0) episodesList.scrollToPosition(idx)
         if (focus) episodesList.post { episodesList.layoutManager?.findViewByPosition(maxOf(idx, 0))?.requestFocus() }

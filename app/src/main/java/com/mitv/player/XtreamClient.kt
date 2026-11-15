@@ -171,6 +171,7 @@ class XtreamClient(server: String, private val username: String, private val pas
                 added = m["added"]?.toLongOrNull() ?: 0L,
                 rating = m["rating"]?.toDoubleOrNull() ?: 0.0,
                 ext = m["container_extension"]?.takeIf { it.isNotBlank() } ?: "mp4",
+                genre = m["genre"]?.takeIf { it.isNotBlank() },
             )
         }
     }
@@ -187,6 +188,7 @@ class XtreamClient(server: String, private val username: String, private val pas
                 updated = m["last_modified"]?.toLongOrNull() ?: 0L,
                 rating = m["rating"]?.toDoubleOrNull() ?: 0.0,
                 plot = m["plot"]?.takeIf { it.isNotBlank() },
+                genre = m["genre"]?.takeIf { it.isNotBlank() },
             )
         }
     }
@@ -255,6 +257,19 @@ class XtreamClient(server: String, private val username: String, private val pas
         )
     }
 
+    /** Programa actual y siguiente de un canal (si el proveedor tiene guía). */
+    suspend fun shortEpg(streamId: String): List<EpgEntry> = withContext(Dispatchers.IO) {
+        val json = getObject(apiUrl("get_short_epg", "&stream_id=$streamId&limit=4"))
+        val arr = json.optJSONArray("epg_listings") ?: return@withContext emptyList()
+        val now = System.currentTimeMillis() / 1000
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val start = o.optString("start_timestamp").toLongOrNull() ?: return@mapNotNull null
+            val end = o.optString("stop_timestamp").toLongOrNull() ?: return@mapNotNull null
+            EpgEntry(decode64(o.optString("title")) ?: "Programa", decode64(o.optString("description")), start, end)
+        }.filter { it.end > now }.sortedBy { it.start }.take(2)
+    }
+
     fun liveUrl(id: String, ext: String) = "$baseUrl/live/${enc(username)}/${enc(password)}/$id.$ext"
     fun movieUrl(id: String, ext: String) = "$baseUrl/movie/${enc(username)}/${enc(password)}/$id.$ext"
     fun episodeUrl(id: String, ext: String) = "$baseUrl/series/${enc(username)}/${enc(password)}/$id.$ext"
@@ -262,7 +277,7 @@ class XtreamClient(server: String, private val username: String, private val pas
     private fun enc(s: String) = Uri.encode(s)
 
     companion object {
-        const val USER_AGENT = "MiTV/2.0 (Android TV)"
+        const val USER_AGENT = "MiTV/3.0 (Android TV)"
 
         fun normalizeServer(raw: String): String {
             var s = raw.trim().trimEnd('/')
@@ -294,6 +309,14 @@ class XtreamClient(server: String, private val username: String, private val pas
             return null
         }
     }
+}
+
+/** La guía viene en Base64; si no lo es, se usa el texto tal cual. */
+private fun decode64(s: String?): String? {
+    if (s.isNullOrBlank()) return null
+    return runCatching {
+        String(android.util.Base64.decode(s, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+    }.getOrNull()?.takeIf { it.isNotBlank() && it.none { c -> c == '\uFFFD' } } ?: s.trim()
 }
 
 private fun String?.httpOrNull(): String? = this?.trim()?.takeIf { it.startsWith("http") }

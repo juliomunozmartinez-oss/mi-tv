@@ -22,9 +22,18 @@ class ProfilesActivity : AppCompatActivity() {
         setContentView(R.layout.activity_profiles)
         prefs = Prefs(this)
 
+        findViewById<View>(R.id.btnSettings).setOnClickListener {
+            Ui.askPin(this, prefs) { startActivity(Intent(this, SettingsActivity::class.java)) }
+        }
+    }
+
+    /** Dibuja los perfiles (se vuelve a hacer al regresar de Ajustes por si se editaron). */
+    private fun buildProfiles() {
         val container = findViewById<LinearLayout>(R.id.profiles)
+        container.removeAllViews()
+        firstAvatar = null
         val inf = LayoutInflater.from(this)
-        Profiles.all.forEach { profile ->
+        Profiles.all(this).forEach { profile ->
             val item = inf.inflate(R.layout.item_profile, container, false)
             val avatar = item.findViewById<View>(R.id.avatar)
             val name = item.findViewById<TextView>(R.id.name)
@@ -41,15 +50,12 @@ class ProfilesActivity : AppCompatActivity() {
             container.addView(item)
             if (firstAvatar == null) firstAvatar = avatar
         }
-
-        findViewById<View>(R.id.btnSettings).setOnClickListener {
-            Ui.askPin(this, prefs) { startActivity(Intent(this, SettingsActivity::class.java)) }
-        }
-        firstAvatar?.requestFocus()
     }
 
     override fun onResume() {
         super.onResume()
+        buildProfiles()
+        firstAvatar?.requestFocus()
         if (!prefs.isConfigured) {
             if (!askedSetup) {
                 askedSetup = true

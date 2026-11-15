@@ -99,4 +99,34 @@ class ProfileStore(context: Context, profileId: String) {
             true
         }
     }
+
+    // ---- Gustos, para «Recomendado para ti» ----
+
+    /** Anota que el perfil empezó a ver algo de esta categoría. */
+    fun recordView(itemKey: String, categoryKey: String, title: String) {
+        val taste = taste().toMutableMap()
+        taste[categoryKey] = (taste[categoryKey] ?: 0) + 1
+        val o = JSONObject()
+        taste.forEach { (k, v) -> o.put(k, v) }
+        val seen = (listOf(itemKey) + seen().filter { it != itemKey }).take(300)
+        sp.edit()
+            .putString("taste", o.toString())
+            .putString("seen", seen.joinToString("\n"))
+            .putString("last_seen", JSONObject().put("key", itemKey).put("cat", categoryKey).put("title", title).toString())
+            .apply()
+    }
+
+    fun taste(): Map<String, Int> {
+        val o = runCatching { JSONObject(sp.getString("taste", "{}") ?: "{}") }.getOrDefault(JSONObject())
+        return o.keys().asSequence().associateWith { o.optInt(it) }
+    }
+
+    fun seen(): List<String> = (sp.getString("seen", "") ?: "").split('\n').filter { it.isNotBlank() }
+
+    /** (título, categoría) de lo último que se vio. */
+    fun lastSeen(): Pair<String, String>? {
+        val o = runCatching { JSONObject(sp.getString("last_seen", "") ?: "") }.getOrNull() ?: return null
+        val cat = o.optString("cat").ifBlank { return null }
+        return o.optString("title") to cat
+    }
 }

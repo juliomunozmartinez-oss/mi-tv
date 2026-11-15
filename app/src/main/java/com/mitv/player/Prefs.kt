@@ -51,4 +51,28 @@ class Prefs(context: Context) {
         kidsCategories = s
         return added
     }
+
+    // ---- Avance automático al pasar por un póster ----
+    var autoPreview: Boolean
+        get() = sp.getBoolean("auto_preview", true)
+        set(v) = sp.edit().putBoolean("auto_preview", v).apply()
+
+    // ---- Categorías ocultas (para adultos) y orden personalizado ----
+    var hiddenCategories: Set<String>
+        get() = sp.getStringSet("hidden_categories", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("hidden_categories", v).apply()
+
+    fun toggleHidden(key: String): Boolean {
+        val s = hiddenCategories.toMutableSet()
+        val hidden = s.add(key)
+        if (!hidden) s.remove(key)
+        hiddenCategories = s
+        return hidden
+    }
+
+    fun categoryOrder(kind: Kind): List<String> =
+        (sp.getString("order_${kind.name}", "") ?: "").split('\n').filter { it.isNotBlank() }
+
+    fun setCategoryOrder(kind: Kind, keys: List<String>) =
+        sp.edit().putString("order_${kind.name}", keys.joinToString("\n")).apply()
 }

@@ -48,6 +48,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var overlayLogo: ImageView
     private lateinit var overlayName: TextView
     private lateinit var overlayHint: TextView
+    private lateinit var overlayEpg: TextView
     private lateinit var nextPanel: View
     private lateinit var nextTitle: TextView
     private lateinit var nextCountdown: TextView
@@ -73,6 +74,8 @@ class PlayerActivity : AppCompatActivity() {
     private var nextEpisode: Episode? = null
     private var countdown = 0
     private var centerLongPressed = false
+    private var recorded = false
+    private var epgJob: kotlinx.coroutines.Job? = null
 
     private val hideOverlay = Runnable { overlay.visibility = View.GONE }
     private val retry = Runnable { startLive() }
@@ -96,7 +99,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val p = Profiles.byId(intent.getStringExtra(Nav.EXTRA_PROFILE))
+        val p = Profiles.byId(this, intent.getStringExtra(Nav.EXTRA_PROFILE))
         val k = runCatching { Kind.valueOf(intent.getStringExtra(Nav.EXTRA_KIND) ?: "") }.getOrNull()
         if (p == null || k == null) {
             finish()
@@ -117,6 +120,7 @@ class PlayerActivity : AppCompatActivity() {
         overlayLogo = findViewById(R.id.overlayLogo)
         overlayName = findViewById(R.id.overlayName)
         overlayHint = findViewById(R.id.overlayHint)
+        overlayEpg = findViewById(R.id.overlayEpg)
         nextPanel = findViewById(R.id.nextPanel)
         nextTitle = findViewById(R.id.nextTitle)
         nextCountdown = findViewById(R.id.nextCountdown)
@@ -267,7 +271,24 @@ class PlayerActivity : AppCompatActivity() {
         val ch = channels[index]
         val star = if (store.inList("live:${ch.id}")) "★ " else ""
         showInfo("${index + 1}  $star${ch.name}", ch.icon)
+        loadEpg(ch)
         startLive()
+    }
+
+    private fun loadEpg(ch: LiveChannel) {
+        overlayEpg.visibility = View.GONE
+        epgJob?.cancel()
+        epgJob = lifecycleScope.launch {
+            val epg = Catalog.epgFor(client, ch.id)
+            if (channels.getOrNull(index)?.id != ch.id) return@launch
+            val now = epg.firstOrNull() ?: return@launch
+            val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale("es", "MX"))
+            fun t(s: Long) = fmt.format(java.util.Date(s * 1000))
+            val next = epg.getOrNull(1)
+            overlayEpg.text = "Ahora: ${now.title}  (${t(now.start)}–${t(now.end)})" +
+                (next?.let { "\nDespués: ${it.title}  (${t(it.start)})" } ?: "")
+            overlayEpg.visibility = View.VISIBLE
+        }
     }
 
     private fun startLive() {
@@ -300,11 +321,15 @@ class PlayerActivity : AppCompatActivity() {
     private fun startMovie() {
         val m = movie ?: return
         showInfo(m.name, m.poster)
+        if (!recorded) {
+            recorded = true
+            store.recordView(Resume.movieKey(m.id), Category.keyOf(Kind.MOVIE, m.categoryId), m.name)
+        }
         play(client.movieUrl(m.id, m.ext), hls = false, positionMs = startMs)
         handler.postDelayed(saver, SAVE_EVERY_MS)
         if (movieImage == m.poster) {
             lifecycleScope.launch {
-                runCatching { client.movieDetail(m) }.onSuccess { d -> d.backdrop?.let { movieImage = it } }
+                runCatching { Catalog.movieDetail(client, m) }.onSuccess { d -> d.backdrop?.let { movieImage = it } }
             }
         }
     }
@@ -321,9 +346,8 @@ class PlayerActivity : AppCompatActivity() {
         }
         loadingView.visibility = View.VISIBLE
         lifecycleScope.launch {
-            runCatching { client.seriesDetail(sid, Catalog.seriesById[sid]) }
+            runCatching { Catalog.seriesDetail(client, sid) }
                 .onSuccess {
-                    Catalog.seriesDetails[sid] = it
                     series = it
                     startEpisodeFromIntent()
                 }
@@ -351,6 +375,12 @@ class PlayerActivity : AppCompatActivity() {
         nextPanel.visibility = View.GONE
         playerView.useController = true
         showInfo("${series?.name ?: ""}  ·  T${ep.season}:E${ep.num}  ${ep.title}", ep.image ?: series?.poster)
+        val sid = seriesId
+        if (!recorded && sid != null) {
+            recorded = true
+            val cat = Catalog.seriesById[sid]?.categoryId ?: ""
+            store.recordView(Resume.seriesKey(sid), Category.keyOf(Kind.SERIES, cat), series?.name ?: "")
+        }
         play(client.episodeUrl(ep.id, ep.ext), hls = false, positionMs = positionMs)
         handler.removeCallbacks(saver)
         handler.postDelayed(saver, SAVE_EVERY_MS)

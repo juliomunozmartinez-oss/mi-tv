@@ -71,6 +71,15 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/overlayEpg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/accent_soft"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/overlayHint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

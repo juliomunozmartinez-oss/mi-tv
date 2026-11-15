@@ -26,6 +26,29 @@ object Catalog {
     /** Detalles de series ya consultados (para pasar al siguiente episodio). */
     val seriesDetails = HashMap<String, SeriesDetail>()
 
+    /** Detalles de películas ya consultados (para el avance automático). */
+    val movieDetails = HashMap<String, MovieDetail>()
+
+    /** Guía de programación por canal: (cuándo se pidió, programas). */
+    val epg = HashMap<String, Pair<Long, List<EpgEntry>>>()
+
+    suspend fun epgFor(client: XtreamClient, streamId: String): List<EpgEntry> {
+        val now = System.currentTimeMillis()
+        epg[streamId]?.let { (at, list) ->
+            val stillValid = now - at < 5 * 60_000 && (list.isEmpty() || list.first().end * 1000 > now)
+            if (stillValid) return list
+        }
+        val list = runCatching { client.shortEpg(streamId) }.getOrDefault(emptyList())
+        epg[streamId] = now to list
+        return list
+    }
+
+    suspend fun movieDetail(client: XtreamClient, movie: Movie): MovieDetail =
+        movieDetails[movie.id] ?: client.movieDetail(movie).also { movieDetails[movie.id] = it }
+
+    suspend fun seriesDetail(client: XtreamClient, seriesId: String): SeriesDetail =
+        seriesDetails[seriesId] ?: client.seriesDetail(seriesId, seriesById[seriesId]).also { seriesDetails[seriesId] = it }
+
     val isLoaded get() = loadedKey != null
 
     private val mutex = Mutex()
@@ -58,6 +81,8 @@ object Catalog {
         movieById = movies.associateBy { it.id }
         seriesById = series.associateBy { it.id }
         seriesDetails.clear()
+        movieDetails.clear()
+        epg.clear()
         loadedKey = prefs.accountKey
 
         if (!prefs.kidsInitialized) {
@@ -77,17 +102,51 @@ object Catalog {
 
     fun isMexico(name: String) = mexicoRegex.containsMatchIn(name)
     fun isKids(name: String) = kidsRegex.containsMatchIn(name)
+
+    /** Ordena según lo que eligió el usuario; lo que no eligió conserva el orden del proveedor al final. */
+    fun applyOrder(base: List<Category>, order: List<String>): List<Category> {
+        if (order.isEmpty()) return base
+        val idx = order.withIndex().associate { it.value to it.index }
+        return base.sortedBy { idx[it.key] ?: Int.MAX_VALUE }
+    }
+
+    fun ordered(kind: Kind, prefs: Prefs): List<Category> = applyOrder(
+        when (kind) {
+            Kind.LIVE -> liveCats
+            Kind.MOVIE -> vodCats
+            Kind.SERIES -> seriesCats
+        },
+        prefs.categoryOrder(kind),
+    )
+}
+
+/** Secciones por tipo. Se buscan en el género del título y en el nombre de su categoría. */
+object Genres {
+    val all: List<Pair<String, Regex>> = listOf(
+        "Animación" to "animaci|animad|animation|anime|cartoon|caricatura|dibujos",
+        "Acción y aventura" to "acci[oó]n|action|aventura|adventure|artes marciales|b[eé]lic|guerra|war",
+        "Comedia" to "comedia|comedy|humor|stand.?up",
+        "Terror y suspenso" to "terror|horror|miedo|suspenso|suspense|thriller",
+        "Ciencia ficción y fantasía" to "ciencia ficci|sci.?fi|science fiction|fantas",
+        "Romance" to "romance|rom[aá]ntic|amor",
+        "Documentales" to "document|docu",
+        "Para toda la familia" to "familia|family|infantil|kids|ni[ñn]os|animaci|animad",
+    ).map { (name, re) -> name to Regex(re, RegexOption.IGNORE_CASE) }
+
+    fun matches(regex: Regex, genre: String?, categoryName: String?): Boolean =
+        (genre != null && regex.containsMatchIn(genre)) || (categoryName != null && regex.containsMatchIn(categoryName))
 }
 
 /** Lo que puede ver un perfil: los infantiles solo ven las categorías permitidas. */
 class CatalogView(prefs: Prefs, val profile: Profile) {
     private val allowed: Set<String>? = if (profile.kids) prefs.kidsCategories else null
+    private val hidden: Set<String> = if (profile.kids) emptySet() else prefs.hiddenCategories
 
-    private fun ok(c: Category) = allowed == null || c.key in allowed
+    private fun ok(c: Category) = (allowed == null || c.key in allowed) && c.key !in hidden
 
-    val liveCats = Catalog.liveCats.filter(::ok)
-    val vodCats = Catalog.vodCats.filter(::ok)
-    val seriesCats = Catalog.seriesCats.filter(::ok)
+    val liveCats = Catalog.ordered(Kind.LIVE, prefs).filter(::ok)
+    val vodCats = Catalog.ordered(Kind.MOVIE, prefs).filter(::ok)
+    val seriesCats = Catalog.ordered(Kind.SERIES, prefs).filter(::ok)
 
     private val liveIds = liveCats.map { it.id }.toSet()
     private val vodIds = vodCats.map { it.id }.toSet()
@@ -114,6 +173,24 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
             "live" -> Catalog.liveById[id]?.categoryId in liveIds
             else -> false
         }
+    }
+
+    private val vodCatName = vodCats.associate { it.id to it.name }
+    private val seriesCatName = seriesCats.associate { it.id to it.name }
+
+    /** Filas por tipo (Animación, Comedia…), con lo más reciente primero. */
+    val movieGenres: List<Pair<String, List<Movie>>> by lazy {
+        val recent = movies.sortedByDescending { it.added }
+        Genres.all.map { (name, re) ->
+            name to recent.filter { Genres.matches(re, it.genre, vodCatName[it.categoryId]) }.take(40)
+        }.filter { it.second.size >= 4 }
+    }
+
+    val seriesGenres: List<Pair<String, List<Series>>> by lazy {
+        val recent = series.sortedByDescending { it.updated }
+        Genres.all.map { (name, re) ->
+            name to recent.filter { Genres.matches(re, it.genre, seriesCatName[it.categoryId]) }.take(40)
+        }.filter { it.second.size >= 4 }
     }
 
     val mexicoLive: List<LiveChannel> by lazy {

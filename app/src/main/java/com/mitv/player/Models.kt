@@ -31,6 +31,7 @@ data class Movie(
     val added: Long,
     val rating: Double,
     val ext: String,
+    val genre: String? = null,
 )
 
 data class Series(
@@ -42,6 +43,7 @@ data class Series(
     val updated: Long,
     val rating: Double,
     val plot: String?,
+    val genre: String? = null,
 )
 
 data class Episode(
@@ -90,16 +92,11 @@ data class MovieDetail(
 data class AccountInfo(val status: String, val expDate: Long?)
 
 data class Profile(val id: String, val name: String, val kids: Boolean, val color: Int) {
-    val initial: String get() = name.take(1).uppercase()
+    val initial: String get() = name.trim().take(1).uppercase().ifBlank { "?" }
 }
 
-object Profiles {
-    val all = listOf(
-        Profile("jenny", "Jenny", kids = false, color = 0xFF3B82F6.toInt()),
-        Profile("julio", "Julio", kids = false, color = 0xFF10B981.toInt()),
-        Profile("cam", "Cam", kids = true, color = 0xFFF59E0B.toInt()),
-        Profile("maju", "Maju", kids = true, color = 0xFFEC4899.toInt()),
-    )
-
-    fun byId(id: String?) = all.firstOrNull { it.id == id }
+/** Un programa de la guía de TV en vivo. Horas en segundos (epoch). */
+data class EpgEntry(val title: String, val description: String?, val start: Long, val end: Long) {
+    fun progress(nowSec: Long): Float =
+        if (end > start) ((nowSec - start).toFloat() / (end - start)).coerceIn(0f, 1f) else 0f
 }
