@@ -135,8 +135,7 @@ class HomeActivity : AppCompatActivity() {
             tabViews += tv
         }
         val avatar = findViewById<View>(R.id.avatar)
-        avatar.background = Ui.circle(profile.color)
-        findViewById<TextView>(R.id.avatarInitial).text = profile.initial
+        Avatars.bind(avatar, findViewById(R.id.avatarInitial), findViewById(R.id.avatarImage), profile)
         avatar.setOnClickListener { finish() }
         btnSleep = findViewById(R.id.btnSleep)
         btnSleep.setOnClickListener { SleepTimer.showDialog(this) { btnSleep.text = SleepTimer.label() } }

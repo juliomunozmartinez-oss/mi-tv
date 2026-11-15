@@ -37,8 +37,7 @@ class ProfilesActivity : AppCompatActivity() {
             val item = inf.inflate(R.layout.item_profile, container, false)
             val avatar = item.findViewById<View>(R.id.avatar)
             val name = item.findViewById<TextView>(R.id.name)
-            avatar.background = Ui.circle(profile.color)
-            item.findViewById<TextView>(R.id.initial).text = profile.initial
+            Avatars.bind(avatar, item.findViewById(R.id.initial), item.findViewById(R.id.avatarImage), profile)
             name.text = profile.name
             item.findViewById<View>(R.id.badge).visibility = if (profile.kids) View.VISIBLE else View.INVISIBLE
             avatar.setOnFocusChangeListener { v, has ->

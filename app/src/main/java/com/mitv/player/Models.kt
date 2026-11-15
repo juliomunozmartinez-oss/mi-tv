@@ -93,7 +93,14 @@ data class MovieDetail(
 
 data class AccountInfo(val status: String, val expDate: Long?)
 
-data class Profile(val id: String, val name: String, val kids: Boolean, val color: Int) {
+data class Profile(
+    val id: String,
+    val name: String,
+    val kids: Boolean,
+    val color: Int,
+    /** Avatar de héroe elegido (nombre, p. ej. "rayo"); null = solo la inicial sobre su color. */
+    val avatar: String? = null,
+) {
     val initial: String get() = name.trim().take(1).uppercase().ifBlank { "?" }
 }
 
