@@ -180,7 +180,7 @@ class HomeActivity : AppCompatActivity() {
         }
         if (Catalog.loadedKey == prefs.accountKey && view != null) {
             // Volvimos de ver algo: refrescar «Seguir viendo» y recomendaciones si cambió.
-            if ((tab == Tab.HOME || tab == Tab.MYLIST) && homeSignature() != renderedSignature) render()
+            if ((tab == Tab.HOME || tab == Tab.MYLIST) && homeSignature() != renderedSignature) refreshKeepingPlace()
             return
         }
         loading.visibility = View.VISIBLE
@@ -451,7 +451,33 @@ class HomeActivity : AppCompatActivity() {
         store.continueWatching().joinToString { it.key + it.updatedAt } + "|" + store.myList.joinToString() +
             "|" + store.seen().take(5).joinToString()
 
-    private fun render() {
+    /**
+     * Al volver de ver algo: actualiza «Seguir viendo», favoritos y recomendaciones
+     * pero deja la pantalla en la misma fila y el mismo póster (y el mismo destacado).
+     */
+    private fun refreshKeepingPlace() {
+        val focused = currentFocus
+        val rowPos = focused?.let(::rowIndexOf) ?: -1
+        val oldRow = adapter.rows.getOrNull(rowPos)
+        val title = oldRow?.title
+        val cardPos = oldRow?.focusPos ?: 0
+        val oldTitles = adapter.rows.associate { it.title to it.focusPos }
+        render(keepHero = true)
+        // Cada fila conserva el póster donde se había quedado.
+        adapter.rows.forEach { r -> oldTitles[r.title]?.let { r.focusPos = it } }
+        if (title == null) {
+            focusStart()
+            return
+        }
+        val target = adapter.rows.indexOfFirst { it.title == title }.takeIf { it >= 0 } ?: rowPos.coerceAtMost(adapter.itemCount - 1)
+        if (target >= 0) {
+            adapter.rows[target].focusPos = cardPos.coerceIn(0, maxOf(0, adapter.rows[target].cards.size - 1))
+            heroButtons.visibility = View.GONE
+            focusRow(target)
+        }
+    }
+
+    private fun render(keepHero: Boolean = false) {
         val v = view ?: return
         val searching = tab == Tab.SEARCH
         searchBox.visibility = if (searching) View.VISIBLE else View.GONE
@@ -570,11 +596,12 @@ class HomeActivity : AppCompatActivity() {
                 else "No hay contenido en esta sección."
             )
         }
-        featured = hero
+        val keep = keepHero && featured != null && hero != null && featured?.kind == hero?.kind
+        if (!keep) featured = hero
         adapter.submit(list)
         rows.scrollToPosition(0)
         showFeatured()
-        hero?.let(::loadFeaturedDetails)
+        if (!keep) hero?.let(::loadFeaturedDetails)
     }
 
     /** Fila con las primeras tarjetas y, si hay más, una tarjeta «Ver todo» al final. */

@@ -295,6 +295,8 @@ class PlayerActivity : AppCompatActivity() {
                     Player.STATE_READY -> {
                         loadingView.visibility = View.GONE
                         errorView.visibility = View.GONE
+                        // Al empezar a ver algo, que aparezca de inmediato en «Seguir viendo».
+                        if (!wasPlaying && kind != Kind.LIVE) saveProgress(ended = false, force = true)
                         wasPlaying = true
                         retries = 0
                     }
@@ -526,12 +528,21 @@ class PlayerActivity : AppCompatActivity() {
 
     // ---------- Seguir viendo ----------
 
-    private fun saveProgress(ended: Boolean) {
+    /**
+     * Guarda el avance para «Seguir viendo». Si el archivo no trae su duración
+     * (pasa con muchos .ts/.mkv del proveedor), se usa la del catálogo o se guarda sin barra.
+     * force = guardar aunque lleve pocos segundos (al empezar a reproducir).
+     */
+    private fun saveProgress(ended: Boolean, force: Boolean = false) {
         val p = player ?: return
         if (kind == Kind.LIVE) return
-        val pos = p.currentPosition
-        val dur = p.duration.takeIf { it > 0 } ?: return
-        val finished = ended || pos > dur * 0.95
+        val pos = p.currentPosition.coerceAtLeast(0L)
+        val known = p.duration.takeIf { it > 0 }
+            ?: episode?.durationSecs?.takeIf { it > 0 }?.let { it * 1000L }
+            ?: movie?.let { Catalog.movieDetails[it.id]?.durationSecs }?.takeIf { it > 0 }?.let { it * 1000L }
+        val dur = known ?: 0L
+        val finished = ended || (dur > 0 && pos > dur * 0.95)
+        val minPos = if (force) 0L else 10_000L
         val now = System.currentTimeMillis()
 
         if (kind == Kind.MOVIE) {
@@ -539,7 +550,7 @@ class PlayerActivity : AppCompatActivity() {
             val key = Resume.movieKey(m.id)
             when {
                 finished -> store.remove(key)
-                pos > 30_000 -> store.save(
+                pos >= minPos -> store.save(
                     Resume(key, Kind.MOVIE, m.id, m.name, null, movieImage ?: m.poster, m.ext, null, pos, dur, now)
                 )
             }
@@ -563,7 +574,7 @@ class PlayerActivity : AppCompatActivity() {
                     )
                 )
             }
-        } else if (pos > 30_000) {
+        } else if (pos >= minPos) {
             store.save(
                 Resume(
                     key, Kind.SERIES, sid, d.name, "T${ep.season}:E${ep.num} · ${ep.title}",
