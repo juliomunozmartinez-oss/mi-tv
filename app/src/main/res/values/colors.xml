@@ -1,6 +1,7 @@
 <resources>
     <color name="bg">#FF0B1220</color>
     <color name="surface">#FF131C2E</color>
+    <color name="selected">#FF1E2A42</color>
     <color name="surface_hi">#FF1E2A42</color>
     <color name="accent">#FF3B82F6</color>
     <color name="accent_soft">#FF60A5FA</color>
