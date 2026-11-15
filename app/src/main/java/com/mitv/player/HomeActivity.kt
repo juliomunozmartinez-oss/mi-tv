@@ -486,9 +486,6 @@ class HomeActivity : AppCompatActivity() {
                 val mine = myListCards(v)
                 if (mine.isNotEmpty()) list += row("Mi lista", mine, false)
 
-                val liveTitle = if (profile.kids) "Canales infantiles" else "Canales de México"
-                val liveSource = if (profile.kids) v.live else v.mexicoLive.ifEmpty { v.live }
-                if (liveSource.isNotEmpty()) list += row(liveTitle, liveSource, true, ::liveCard)
 
                 if (v.recentMovies.isNotEmpty()) list += row("Películas recién agregadas", v.recentMovies, false, ::movieCard)
                 if (v.recentSeries.isNotEmpty()) list += row("Series con episodios nuevos", v.recentSeries, false, ::seriesCard)

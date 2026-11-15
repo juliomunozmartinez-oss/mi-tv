@@ -9,7 +9,7 @@
 
     <application
         android:name=".MiTvApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:largeHeap="true"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
