@@ -1,0 +1,45 @@
+name: Lo más visto
+
+# Todos los días baja de TMDB las películas y series en tendencia (en español de México)
+# y las publica en la versión «trending» del repositorio. La app las lee una vez al día.
+on:
+  schedule:
+    - cron: "17 11 * * *"   # 5:17 a.m. hora del centro de México
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar tendencias de TMDB
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$TMDB_TOKEN" ]; then
+            echo "::error::Falta el secreto TMDB_TOKEN (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          get() { curl -fsS -H "Authorization: Bearer $TMDB_TOKEN" "https://api.themoviedb.org/3/$1"; }
+          get "trending/movie/week?language=es-MX&page=1" > m1.json
+          get "trending/movie/week?language=es-MX&page=2" > m2.json
+          get "trending/tv/week?language=es-MX&page=1" > t1.json
+          get "trending/tv/week?language=es-MX&page=2" > t2.json
+          jq -n --slurpfile m1 m1.json --slurpfile m2 m2.json --slurpfile t1 t1.json --slurpfile t2 t2.json '{
+            updated: (now | todate),
+            movies: [ ($m1[0].results + $m2[0].results)[] | {t: .title, o: .original_title, y: ((.release_date // "")[0:4])} ],
+            series: [ ($t1[0].results + $t2[0].results)[] | {t: .name, o: .original_name, y: ((.first_air_date // "")[0:4])} ]
+          }' > trending.json
+          echo "Películas: $(jq '.movies | length' trending.json) · Series: $(jq '.series | length' trending.json)"
+
+      - name: Publicar
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: trending
+          name: Lo más visto (se actualiza cada día)
+          files: trending.json
+          prerelease: true
+          make_latest: false

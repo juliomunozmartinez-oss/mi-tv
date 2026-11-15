@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.DisplayMetrics
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -49,6 +50,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private lateinit var store: ProfileStore
     private var view: CatalogView? = null
+    private var trending: Trending.Result? = null
 
     private lateinit var rows: RecyclerView
     private lateinit var rowsLayout: LinearLayoutManager
@@ -186,8 +188,17 @@ class HomeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 Catalog.ensureLoaded(prefs)
-                view = withContext(Dispatchers.Default) { CatalogView(prefs, profile) }
+                val v = withContext(Dispatchers.Default) { CatalogView(prefs, profile) }
+                view = v
                 render()
+                // «Lo más visto» llega después, sin hacer esperar la pantalla.
+                launch {
+                    trending = runCatching { Trending.forView(this@HomeActivity, v) }.getOrNull()
+                    if (trending?.isEmpty == false && tab in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES)) {
+                        render()
+                        focusStart()
+                    }
+                }
                 focusStart()
             } catch (e: Exception) {
                 showMessage("No se pudo cargar el catálogo.\n\n${XtreamClient.friendlyError(e)}")
@@ -275,7 +286,6 @@ class HomeActivity : AppCompatActivity() {
 
     private fun onCardFocused(row: Row, index: Int) {
         val rowPos = adapter.indexOf(row)
-        if (rowPos >= 0) snapRow(rowPos)
         if (!prefs.autoPreview || tab == Tab.SEARCH) return
         val card = row.cards.getOrNull(index) ?: return
         val key = "${card.kind}:${card.id}"
@@ -287,6 +297,73 @@ class HomeActivity : AppCompatActivity() {
             heroButtons.visibility = View.GONE
             showCardPreview(card)
         }
+    }
+
+    /**
+     * ▲ ▼ entre filas los maneja la app: acomoda la fila destino arriba al instante y enfoca
+     * el póster donde se quedó esa fila. Así no se «recorre» ni se traba al subir rápido.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val up = event.keyCode == KeyEvent.KEYCODE_DPAD_UP
+        val down = event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+        if (event.action == KeyEvent.ACTION_DOWN && (up || down) && ::rows.isInitialized) {
+            val focused = currentFocus
+            val rowPos = focused?.let(::rowIndexOf) ?: -1
+            if (rowPos >= 0) {
+                val target = rowPos + if (down) 1 else -1
+                when {
+                    target < 0 -> {
+                        if (heroButtons.visibility == View.VISIBLE && previewArea.visibility == View.VISIBLE) {
+                            showFeatured()
+                            btnPlay.requestFocus()
+                        } else {
+                            tabViews[tab.ordinal].requestFocus()
+                        }
+                    }
+                    target < adapter.itemCount -> focusRow(target)
+                }
+                return true
+            }
+            // Desde los botones del destacado, ▼ va a la primera fila (sin adivinar).
+            if (down && focused != null && (focused.id == R.id.btnPlay || focused.id == R.id.btnInfo) && adapter.itemCount > 0) {
+                focusRow(0)
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** Número de fila que contiene a esta vista, o -1 si no está en las filas. */
+    private fun rowIndexOf(v: View): Int {
+        var child: View = v
+        var parent = v.parent
+        while (parent is View) {
+            if (parent === rows) return rows.getChildAdapterPosition(child)
+            child = parent
+            parent = parent.parent
+        }
+        return -1
+    }
+
+    private fun focusRow(target: Int) {
+        rowsLayout.scrollToPositionWithOffset(target, 0)
+        rows.post {
+            val rowView = rowsLayout.findViewByPosition(target) ?: return@post
+            val rv = rowView.findViewById<RowRecyclerView>(R.id.rowList) ?: return@post
+            val lm = rv.layoutManager as? LinearLayoutManager ?: return@post
+            val pos = (rv.row?.focusPos ?: 0).coerceIn(0, maxOf(0, (rv.adapter?.itemCount ?: 1) - 1))
+            val child = lm.findViewByPosition(pos)
+            if (child != null) {
+                focusCard(child)
+            } else {
+                lm.scrollToPositionWithOffset(pos, 0)
+                rv.post { lm.findViewByPosition(pos)?.let(::focusCard) }
+            }
+        }
+    }
+
+    private fun focusCard(item: View) {
+        (item.findViewById<View>(R.id.frame) ?: item).requestFocus()
     }
 
     private fun snapRow(position: Int) {
@@ -391,6 +468,16 @@ class HomeActivity : AppCompatActivity() {
                 val continueRow = store.continueWatching().filter { v.canSee(it.key) }.map(::resumeCard)
                 if (continueRow.isNotEmpty()) list += Row("Seguir viendo", continueRow, wide = true)
 
+                trending?.let { t ->
+                    val mixed = ArrayList<Card>()
+                    val n = maxOf(t.movies.size, t.series.size)
+                    for (i in 0 until n) {
+                        t.series.getOrNull(i)?.let { mixed += seriesCard(it) }
+                        t.movies.getOrNull(i)?.let { mixed += movieCard(it) }
+                    }
+                    if (mixed.isNotEmpty()) list += row("🔥 Lo más visto hoy", mixed, false)
+                }
+
                 val favs = store.favorites().filter(v::canSee).mapNotNull(::cardForKey)
                 if (favs.isNotEmpty()) list += Row("Favoritos de ${profile.name}", favs, wide = false)
 
@@ -427,6 +514,9 @@ class HomeActivity : AppCompatActivity() {
                 }
             }
             Tab.MOVIES -> {
+                trending?.movies?.takeIf { it.isNotEmpty() }?.let {
+                    list += row("🔥 Películas más vistas", it, false, ::movieCard)
+                }
                 v.movieGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
                 }
@@ -437,6 +527,9 @@ class HomeActivity : AppCompatActivity() {
                 hero = pickMovieHero(v.recentMovies.take(20))
             }
             Tab.SERIES -> {
+                trending?.series?.takeIf { it.isNotEmpty() }?.let {
+                    list += row("🔥 Series más vistas", it, false, ::seriesCard)
+                }
                 v.seriesGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }
                 }
