@@ -277,7 +277,7 @@ class XtreamClient(server: String, private val username: String, private val pas
     private fun enc(s: String) = Uri.encode(s)
 
     companion object {
-        const val USER_AGENT = "MiTV/3.0 (Android TV)"
+        const val USER_AGENT = "MugaTV/3.6 (Android TV)"
 
         fun normalizeServer(raw: String): String {
             var s = raw.trim().trimEnd('/')

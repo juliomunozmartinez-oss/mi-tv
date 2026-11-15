@@ -109,6 +109,7 @@ class HomeActivity : AppCompatActivity() {
         adapter = RowsAdapter(
             onCard = { row, i -> Nav.open(this, profile, row, i) },
             onFocus = ::onCardFocused,
+            store = store,
         )
         // Las filas no se desplazan solas: al enfocar una fila la acomodamos arriba.
         rowsLayout = object : LinearLayoutManager(this) {

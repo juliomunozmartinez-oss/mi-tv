@@ -136,7 +136,11 @@ class SearchActivity : AppCompatActivity() {
     private fun show(title: String, cards: List<Card>, emptyText: String?) {
         resultsTitle.text = title
         val row = Row(title, cards, wide = false)
-        results.adapter = CardAdapter(row, onClick = { r, i -> Nav.open(this, profile, r, i) })
+        results.adapter = CardAdapter(
+            row,
+            onClick = { r, i -> Nav.open(this, profile, r, i) },
+            store = ProfileStore(this, profile.id),
+        )
         empty.visibility = if (cards.isEmpty() && emptyText != null) View.VISIBLE else View.GONE
         empty.text = emptyText ?: ""
     }

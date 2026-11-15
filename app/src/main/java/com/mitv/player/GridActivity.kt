@@ -51,7 +51,11 @@ class GridActivity : AppCompatActivity() {
             loading.visibility = View.GONE
             count.text = "${cards.size} títulos"
             val row = Row(source.title, cards, source.wide)
-            grid.adapter = CardAdapter(row, onClick = { r, i -> Nav.open(this@GridActivity, profile, r, i) })
+            grid.adapter = CardAdapter(
+                row,
+                onClick = { r, i -> Nav.open(this@GridActivity, profile, r, i) },
+                store = ProfileStore(this@GridActivity, profile.id),
+            )
             grid.post { grid.layoutManager?.findViewByPosition(0)?.requestFocus() }
         }
     }

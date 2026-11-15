@@ -75,6 +75,8 @@ class CardAdapter(
     private val row: Row,
     private val onClick: (Row, Int) -> Unit,
     private val onFocus: ((Row, Int) -> Unit)? = null,
+    /** Si se da, mantener OK agrega o quita de Mi lista y se muestra ★ en lo que ya está. */
+    private val store: ProfileStore? = null,
 ) : RecyclerView.Adapter<CardAdapter.VH>() {
 
     class VH(view: View) : RecyclerView.ViewHolder(view) {
@@ -84,6 +86,7 @@ class CardAdapter(
         val progress: ProgressBar = view.findViewById(R.id.progress)
         val title: TextView? = view.findViewById(R.id.title)
         val subtitle: TextView? = view.findViewById(R.id.subtitle)
+        val badge: View = view.findViewById(R.id.listBadge)
     }
 
     override fun getItemViewType(position: Int) = if (row.wide) TYPE_WIDE else TYPE_POSTER
@@ -108,6 +111,19 @@ class CardAdapter(
         holder.focusTarget.setOnClickListener {
             val pos = holder.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION) onClick(row, pos)
+        }
+        val key = MyList.keyOf(card)
+        holder.badge.visibility = if (key != null && store?.inList(key) == true) View.VISIBLE else View.GONE
+        if (store != null && key != null) {
+            holder.focusTarget.setOnLongClickListener { v ->
+                val added = store.toggleList(key)
+                MyList.toast(v.context, card.title, added)
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos)
+                true
+            }
+        } else {
+            holder.focusTarget.setOnLongClickListener(null)
         }
         if (card.more) {
             holder.fallback.text = "Ver todo  →"
@@ -155,6 +171,7 @@ class CardAdapter(
 class RowsAdapter(
     private val onCard: (Row, Int) -> Unit,
     private val onFocus: (Row, Int) -> Unit,
+    private val store: ProfileStore? = null,
 ) : RecyclerView.Adapter<RowsAdapter.RowVH>() {
 
     private val pool = RecyclerView.RecycledViewPool().apply {
@@ -193,8 +210,28 @@ class RowsAdapter(
         val row = rows[position]
         holder.title.text = row.title
         holder.list.row = row
-        holder.list.adapter = CardAdapter(row, onCard, onFocus)
+        holder.list.adapter = CardAdapter(row, onCard, onFocus, store)
         // Al volver a mostrar la fila, conservar dónde se quedó.
         (holder.list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(row.focusPos, 0)
+    }
+}
+
+/** Ayudas para «Mi lista» desde cualquier tarjeta. */
+object MyList {
+    fun keyOf(card: Card): String? = when {
+        card.more -> null
+        card.kind == Kind.MOVIE -> "movie:${card.id}"
+        card.kind == Kind.SERIES -> "series:${card.id}"
+        card.kind == Kind.LIVE -> "live:${card.id}"
+        else -> null
+    }
+
+    fun toast(ctx: android.content.Context, title: String, added: Boolean) {
+        android.widget.Toast.makeText(
+            ctx,
+            if (added) "★ $title agregado a Mi lista — está en la pestaña «Mi lista», arriba"
+            else "$title quitado de Mi lista",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
     }
 }
