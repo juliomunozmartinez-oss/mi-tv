@@ -6,6 +6,9 @@ on:
   schedule:
     - cron: "17 11 * * *"   # 5:17 a.m. hora del centro de México
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/trending.yml
 
 permissions:
   contents: write
