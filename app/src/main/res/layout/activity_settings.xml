@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="96dp"
+        android:paddingTop="32dp"
+        android:paddingEnd="96dp"
+        android:paddingBottom="48dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ajustes"
+            android:textColor="@color/text"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            style="@style/Label"
+            android:text="Atajo: pega aquí el enlace de tu lista (get.php o /playlist/...) y toca «Extraer datos»" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/link"
+                style="@style/Input"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:hint="https://servidor:puerto/get.php?username=...&amp;password=..."
+                android:inputType="textUri" />
+
+            <TextView
+                android:id="@+id/btnParse"
+                style="@style/Btn"
+                android:layout_marginStart="12dp"
+                android:text="Extraer datos" />
+        </LinearLayout>
+
+        <TextView style="@style/Label" android:text="Servidor (con http:// o https:// y el puerto)" />
+        <EditText
+            android:id="@+id/server"
+            style="@style/Input"
+            android:hint="https://servidor.com:2087"
+            android:inputType="textUri" />
+
+        <TextView style="@style/Label" android:text="Usuario" />
+        <EditText
+            android:id="@+id/username"
+            style="@style/Input"
+            android:inputType="textVisiblePassword|textNoSuggestions" />
+
+        <TextView style="@style/Label" android:text="Contraseña" />
+        <EditText
+            android:id="@+id/password"
+            style="@style/Input"
+            android:imeOptions="actionDone"
+            android:inputType="textVisiblePassword|textNoSuggestions" />
+
+        <TextView
+            android:id="@+id/result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/text_dim"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnSave"
+                style="@style/Btn"
+                android:layout_marginEnd="12dp"
+                android:text="Probar y guardar" />
+
+            <TextView
+                android:id="@+id/btnSaveNoTest"
+                style="@style/Btn"
+                android:layout_marginEnd="12dp"
+                android:text="Guardar sin probar" />
+
+            <TextView
+                android:id="@+id/btnUnhide"
+                style="@style/Btn"
+                android:text="Mostrar categorías ocultas" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
