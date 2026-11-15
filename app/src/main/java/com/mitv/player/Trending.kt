@@ -23,14 +23,43 @@ object Trending {
 
     private data class Entry(val title: String, val original: String)
 
+    /** Último resultado por perfil, para mostrarlo de inmediato al volver al Inicio. */
+    private val memo = HashMap<String, Result>()
+
+    fun cached(profileId: String): Result? = memo[profileId]
+
     /** Descarga (una vez al día) y cruza con lo que puede ver este perfil. */
-    suspend fun forView(ctx: Context, v: CatalogView): Result = withContext(Dispatchers.IO) {
+    suspend fun forView(ctx: Context, prefs: Prefs, profile: Profile, v: CatalogView): Result = withContext(Dispatchers.IO) {
         val json = load(File(ctx.filesDir, "trending.json")) ?: return@withContext Result(emptyList(), emptyList())
         val movies = entries(json, "movies")
         val series = entries(json, "series")
-        withContext(Dispatchers.Default) {
-            Result(match(movies, v.movies) { it.name }, match(series, v.series) { it.name })
+        val result = withContext(Dispatchers.Default) {
+            // Reusa los títulos ya preparados para Buscar (mucho más rápido que volver a procesarlos).
+            val idx = SearchIndex.get(prefs, profile, v)
+            val movieByKey = HashMap<String, Movie>()
+            val seriesByKey = HashMap<String, Series>()
+            for (e in idx.entries) {
+                val k = e.prepared.joined
+                when (e.card.kind) {
+                    Kind.MOVIE -> if (k !in movieByKey) Catalog.movieById[e.card.id]?.let { movieByKey[k] = it }
+                    Kind.SERIES -> if (k !in seriesByKey) Catalog.seriesById[e.card.id]?.let { seriesByKey[k] = it }
+                    else -> Unit
+                }
+            }
+            Result(pick(movies, movieByKey), pick(series, seriesByKey))
         }
+        memo[profile.id] = result
+        result
+    }
+
+    private fun <T> pick(top: List<Entry>, byKey: Map<String, T>): List<T> {
+        val out = ArrayList<T>()
+        val used = HashSet<T>()
+        for (e in top) {
+            val hit = byKey[key(e.title)] ?: byKey[key(e.original)] ?: continue
+            if (used.add(hit)) out += hit
+        }
+        return out
     }
 
     private fun load(file: File): JSONObject? {
@@ -65,26 +94,4 @@ object Trending {
     }
 
     private fun key(name: String) = SearchMatcher.tokens(name).joinToString(" ")
-
-    /** Busca cada título del top en el catálogo (por nombre en español o el original), en el orden del top. */
-    private fun <T> match(top: List<Entry>, items: List<T>, name: (T) -> String): List<T> {
-        if (top.isEmpty() || items.isEmpty()) return emptyList()
-        val wanted = HashSet<String>()
-        top.forEach { e ->
-            key(e.title).takeIf { it.isNotEmpty() }?.let(wanted::add)
-            key(e.original).takeIf { it.isNotEmpty() }?.let(wanted::add)
-        }
-        val index = HashMap<String, T>()
-        for (item in items) {
-            val k = key(name(item))
-            if (k in wanted && k !in index) index[k] = item
-        }
-        val out = ArrayList<T>()
-        val used = HashSet<T>()
-        for (e in top) {
-            val hit = index[key(e.title)] ?: index[key(e.original)] ?: continue
-            if (used.add(hit)) out += hit
-        }
-        return out
-    }
 }

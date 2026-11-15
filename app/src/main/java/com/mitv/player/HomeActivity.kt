@@ -190,16 +190,19 @@ class HomeActivity : AppCompatActivity() {
                 Catalog.ensureLoaded(prefs)
                 val v = withContext(Dispatchers.Default) { CatalogView(prefs, profile) }
                 view = v
+                trending = Trending.cached(profile.id)
                 render()
                 // Preparar la búsqueda en segundo plano para que «Buscar» abra al instante.
                 launch(Dispatchers.Default) { runCatching { SearchIndex.get(prefs, profile, v) } }
                 // «Lo más visto» llega después, sin hacer esperar la pantalla.
                 launch {
-                    trending = runCatching { Trending.forView(this@HomeActivity, v) }.getOrNull()
-                    if (trending?.isEmpty == false && tab in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES)) {
-                        render()
-                        focusStart()
-                    }
+                    val before = trending
+                    val fresh = runCatching { Trending.forView(this@HomeActivity, prefs, profile, v) }.getOrNull()
+                    trending = fresh
+                    val changed = fresh != null && !fresh.isEmpty &&
+                        (before == null || before.movies != fresh.movies || before.series != fresh.series)
+                    // Si llegó después, se agrega la fila sin mover el foco.
+                    if (changed && tab in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES)) refreshKeepingPlace()
                 }
                 focusStart()
             } catch (e: Exception) {
