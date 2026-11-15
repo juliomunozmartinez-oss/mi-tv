@@ -56,6 +56,13 @@ class ProfilesActivity : AppCompatActivity() {
         super.onResume()
         buildProfiles()
         firstAvatar?.requestFocus()
+        MiTvApp.takeLastCrash(this)?.let { report ->
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("La app se cerró por un error")
+                .setMessage("Tómale foto a este mensaje y mándaselo a Claude para arreglarlo:\n\n$report")
+                .setPositiveButton("Entendido", null)
+                .show()
+        }
         if (!prefs.isConfigured) {
             if (!askedSetup) {
                 askedSetup = true

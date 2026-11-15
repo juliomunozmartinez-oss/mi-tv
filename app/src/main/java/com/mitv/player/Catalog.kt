@@ -232,25 +232,26 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
         }
     }
 
-    private val vodCatName = vodCats.associate { it.id to it.name }
-    private val seriesCatName = seriesCats.associate { it.id to it.name }
+    /** Lo más nuevo primero (se calcula una sola vez, fuera de la pantalla). */
+    val recentMovies: List<Movie> = movies.sortedByDescending { it.added }
+    val recentSeries: List<Series> = series.sortedByDescending { it.updated }
 
     /** Filas por tipo (Animación, Comedia…), con lo más reciente primero. */
-    val movieGenres: List<Pair<String, List<Movie>>> by lazy {
-        val recent = movies.sortedByDescending { it.added }
-        Genres.all.map { (name, re) ->
-            name to recent.filter { Genres.matches(re, it.genre, vodCatName[it.categoryId]) }.take(40)
-        }.filter { it.second.size >= 4 }
-    }
+    val movieGenres: List<Pair<String, List<Movie>>> = Genres.all.map { (name, re) ->
+        // El nombre de cada categoría se revisa una sola vez; el género de cada título solo si existe.
+        val catMatch = vodCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
+        name to recentMovies.asSequence()
+            .filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
+            .take(40).toList()
+    }.filter { it.second.size >= 4 }
 
-    val seriesGenres: List<Pair<String, List<Series>>> by lazy {
-        val recent = series.sortedByDescending { it.updated }
-        Genres.all.map { (name, re) ->
-            name to recent.filter { Genres.matches(re, it.genre, seriesCatName[it.categoryId]) }.take(40)
-        }.filter { it.second.size >= 4 }
-    }
+    val seriesGenres: List<Pair<String, List<Series>>> = Genres.all.map { (name, re) ->
+        val catMatch = seriesCats.filter { re.containsMatchIn(it.name) }.map { it.id }.toSet()
+        name to recentSeries.asSequence()
+            .filter { it.categoryId in catMatch || (it.genre != null && re.containsMatchIn(it.genre)) }
+            .take(40).toList()
+    }.filter { it.second.size >= 4 }
 
-    val mexicoLive: List<LiveChannel> by lazy {
+    val mexicoLive: List<LiveChannel> =
         liveCats.filter { Catalog.isMexico(it.name) }.flatMap { liveIn(it.id) }
-    }
 }

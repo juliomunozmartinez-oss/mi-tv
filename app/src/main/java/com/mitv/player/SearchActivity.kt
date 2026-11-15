@@ -102,8 +102,8 @@ class SearchActivity : AppCompatActivity() {
         }
         entries = list
         // Sugerencias mientras no se escribe nada: lo más nuevo, series y películas mezcladas.
-        val s = v.series.sortedByDescending { it.updated }.take(12).map { Card(Kind.SERIES, it.id, it.name, image = it.poster) }
-        val m = v.movies.sortedByDescending { it.added }.take(12).map { Card(Kind.MOVIE, it.id, it.name, image = it.poster) }
+        val s = v.recentSeries.take(12).map { Card(Kind.SERIES, it.id, it.name, image = it.poster) }
+        val m = v.recentMovies.take(12).map { Card(Kind.MOVIE, it.id, it.name, image = it.poster) }
         suggestions = s.zip(m).flatMap { listOf(it.first, it.second) }
     }
 

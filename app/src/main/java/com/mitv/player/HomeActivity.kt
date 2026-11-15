@@ -400,9 +400,9 @@ class HomeActivity : AppCompatActivity() {
                 val liveSource = if (profile.kids) v.live else v.mexicoLive.ifEmpty { v.live }
                 if (liveSource.isNotEmpty()) list += Row(liveTitle, liveSource.take(40).map(::liveCard), wide = true)
 
-                val recentMovies = v.movies.sortedByDescending { it.added }.take(30)
+                val recentMovies = v.recentMovies.take(30)
                 if (recentMovies.isNotEmpty()) list += Row("Películas recién agregadas", recentMovies.map(::movieCard), false)
-                val recentSeries = v.series.sortedByDescending { it.updated }.take(30)
+                val recentSeries = v.recentSeries.take(30)
                 if (recentSeries.isNotEmpty()) list += Row("Series con episodios nuevos", recentSeries.map(::seriesCard), false)
 
                 v.movieGenres.take(3).forEach { (name, items) -> list += Row("Películas: $name", items.map(::movieCard), false) }
@@ -419,7 +419,7 @@ class HomeActivity : AppCompatActivity() {
                     val items = v.moviesIn(c.id)
                     if (items.isNotEmpty()) list += Row(c.name, items.map(::movieCard), false)
                 }
-                hero = pickMovieHero(v.movies.sortedByDescending { it.added }.take(20))
+                hero = pickMovieHero(v.recentMovies.take(20))
             }
             Tab.SERIES -> {
                 v.seriesGenres.forEach { (name, items) -> list += Row(name, items.map(::seriesCard), false) }
@@ -427,7 +427,7 @@ class HomeActivity : AppCompatActivity() {
                     val items = v.seriesIn(c.id)
                     if (items.isNotEmpty()) list += Row(c.name, items.map(::seriesCard), false)
                 }
-                hero = pickSeriesHero(v.series.sortedByDescending { it.updated }.take(20))
+                hero = pickSeriesHero(v.recentSeries.take(20))
             }
             Tab.SEARCH -> {
                 featured = null
