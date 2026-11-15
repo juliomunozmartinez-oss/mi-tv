@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.mitv.player"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     // Llave fija para que cada versión nueva se instale encima de la anterior.

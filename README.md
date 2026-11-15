@@ -6,15 +6,18 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 > Tus datos de acceso **no** están en este código: se escriben dentro de la app,
 > en la pantalla **Ajustes**, y se guardan solo en tu tele.
 
-## Versión 1: TV en vivo
-- Categorías a la izquierda, canales a la derecha, con logos.
-- **★ Favoritos**: mantén presionado OK sobre un canal para agregarlo o quitarlo.
-- **Ocultar categorías**: mantén presionado OK sobre una categoría. Se recuperan en Ajustes.
-- Recuerda la última categoría que viste.
-- Reproductor a pantalla completa: ▲ ▼ cambian de canal, OK muestra la info del canal.
-- Si un canal no abre en `.ts`, prueba solo en formato HLS (`.m3u8`); si se corta, reintenta.
-- En Ajustes puedes pegar el enlace de tu proveedor (`get.php?...` o `/playlist/usuario/contraseña/...`)
-  y la app extrae servidor, usuario y contraseña.
+## Qué hace (versión 2)
+- **Perfiles**: Jenny y Julio (adultos), Cam y Maju (infantiles). PIN opcional para adultos, apagado de inicio.
+- **Inicio estilo streaming**: un destacado grande arriba y filas de pósters: Seguir viendo, Mi lista,
+  Canales de México, Películas recién agregadas, Series con episodios nuevos y categorías.
+- **Pestañas**: Inicio · TV en vivo · Películas · Series · Buscar.
+- **Fichas** de película y serie con imagen grande, sinopsis, temporadas y episodios.
+- **Seguir viendo** por perfil: recuerda el minuto exacto; las series siguen en el episodio siguiente.
+- **Siguiente episodio automático** con cuenta regresiva de 10 segundos (se puede cancelar).
+- **Perfiles infantiles**: solo ven las categorías permitidas. Se detectan solas por nombre
+  (Infantil, Kids, Niños, Animación…) y se ajustan en **Ajustes → Elegir categorías infantiles**.
+- **TV en vivo**: categorías de México primero; ▲ ▼ cambian de canal; mantener OK agrega a Mi lista.
+- Diseño propio, azul oscuro y minimalista. No usa logotipos ni diseños de otras plataformas.
 
 ## Instalar en el Chromecast
 1. En el Chromecast: **Ajustes → Sistema → Acerca de** y presiona 7 veces **Compilación de SO de Android TV**
@@ -23,7 +26,7 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 3. **Ajustes → Apps → Seguridad y restricciones → Fuentes desconocidas** y activa **Downloader**.
 4. Abre Downloader y escribe la dirección del APK de la última versión
    (pestaña **Releases** de este repositorio, archivo `MiTV.apk`).
-5. Instala y abre **Mi TV**. Entra a **Ajustes**, escribe tus datos y toca **Probar y guardar**.
+5. Instala y abre **Mi TV**. La primera vez abre **Ajustes**: escribe tus datos y toca **Probar y guardar**.
 
 Cada versión nueva se instala encima de la anterior sin borrar tus favoritos.
 
@@ -31,6 +34,6 @@ Cada versión nueva se instala encima de la anterior sin borrar tus favoritos.
 GitHub Actions compila el APK en cada `push` (`.github/workflows/build.yml`) y lo publica en **Releases**.
 Para compilar en tu computadora: `./gradlew assembleDebug` (necesita Android SDK y Java 17).
 
-## Próximas versiones
-- v2: películas y series.
-- v3: guía de programación (EPG).
+## Ideas para después
+- Guía de programación (EPG) en TV en vivo.
+- Editar nombres y colores de perfiles desde la app.

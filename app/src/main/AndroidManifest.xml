@@ -17,7 +17,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ProfilesActivity"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>
@@ -27,12 +27,14 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".HomeActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name=".DetailActivity" android:exported="false" android:screenOrientation="landscape" />
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:screenOrientation="landscape"
             android:windowSoftInputMode="adjustResize" />
-
+        <activity android:name=".KidsActivity" android:exported="false" android:screenOrientation="landscape" />
         <activity
             android:name=".PlayerActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

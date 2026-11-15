@@ -2,7 +2,7 @@ package com.mitv.player
 
 import android.content.Context
 
-/** Ajustes guardados en la tele: servidor, cuenta, favoritos y categorías ocultas. */
+/** Ajustes generales de la app (compartidos por todos los perfiles). */
 class Prefs(context: Context) {
     private val sp = context.applicationContext.getSharedPreferences("mitv", Context.MODE_PRIVATE)
 
@@ -21,44 +21,34 @@ class Prefs(context: Context) {
     val isConfigured: Boolean
         get() = server.isNotBlank() && username.isNotBlank() && password.isNotBlank()
 
-    /** Cambia cuando cambia la cuenta: sirve para saber si hay que recargar la lista. */
     val accountKey: String
         get() = "$server|$username|$password"
 
-    var favorites: Set<String>
-        get() = sp.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()
-        set(v) = sp.edit().putStringSet("favorites", v).apply()
+    fun client() = XtreamClient(server, username, password)
 
-    var hiddenCategories: Set<String>
-        get() = sp.getStringSet("hidden_categories", emptySet())?.toSet() ?: emptySet()
-        set(v) {
-            sp.edit().putStringSet("hidden_categories", v).apply()
-            layoutVersion += 1
-        }
+    // ---- PIN de adultos (desactivado de inicio) ----
+    var pinEnabled: Boolean
+        get() = sp.getBoolean("pin_enabled", false)
+        set(v) = sp.edit().putBoolean("pin_enabled", v).apply()
 
-    var lastCategory: String
-        get() = sp.getString("last_category", "") ?: ""
-        set(v) = sp.edit().putString("last_category", v).apply()
+    var pin: String
+        get() = sp.getString("pin", "") ?: ""
+        set(v) = sp.edit().putString("pin", v).apply()
 
-    /** Sube cada vez que cambia lo que se muestra en la lista de categorías. */
-    var layoutVersion: Int
-        get() = sp.getInt("layout_version", 0)
-        private set(v) = sp.edit().putInt("layout_version", v).apply()
+    // ---- Categorías permitidas en perfiles infantiles ("live:ID", "vod:ID", "series:ID") ----
+    var kidsInitialized: Boolean
+        get() = sp.getBoolean("kids_initialized", false)
+        set(v) = sp.edit().putBoolean("kids_initialized", v).apply()
 
-    /** Agrega o quita un favorito. Regresa true si quedó como favorito. */
-    fun toggleFavorite(channelId: String): Boolean {
-        val set = favorites.toMutableSet()
-        val added = set.add(channelId)
-        if (!added) set.remove(channelId)
-        favorites = set
+    var kidsCategories: Set<String>
+        get() = sp.getStringSet("kids_categories", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("kids_categories", v).apply()
+
+    fun toggleKidsCategory(key: String): Boolean {
+        val s = kidsCategories.toMutableSet()
+        val added = s.add(key)
+        if (!added) s.remove(key)
+        kidsCategories = s
         return added
-    }
-
-    fun hideCategory(categoryId: String) {
-        hiddenCategories = hiddenCategories + categoryId
-    }
-
-    fun unhideAll() {
-        hiddenCategories = emptySet()
     }
 }

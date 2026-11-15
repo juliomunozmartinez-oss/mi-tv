@@ -93,10 +93,57 @@
                 android:layout_marginEnd="12dp"
                 android:text="Guardar sin probar" />
 
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:text="Perfiles infantiles (Cam y Maju)"
+            android:textColor="@color/text"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnKids"
+            style="@style/Btn"
+            android:layout_marginTop="12dp"
+            android:text="Elegir categorías infantiles" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="40dp"
+            android:text="PIN para perfiles de adultos"
+            android:textColor="@color/text"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/pinStatus"
+            style="@style/Label"
+            android:layout_marginTop="6dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/pinInput"
+                style="@style/Input"
+                android:layout_width="200dp"
+                android:hint="4 números"
+                android:imeOptions="actionDone"
+                android:inputType="numberPassword"
+                android:maxLength="4" />
+
             <TextView
-                android:id="@+id/btnUnhide"
+                android:id="@+id/btnPin"
                 style="@style/Btn"
-                android:text="Mostrar categorías ocultas" />
+                android:layout_marginStart="12dp"
+                android:text="Activar PIN" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

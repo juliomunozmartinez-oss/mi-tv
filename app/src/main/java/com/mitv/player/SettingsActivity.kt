@@ -20,7 +20,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var username: EditText
     private lateinit var password: EditText
     private lateinit var result: TextView
-    private lateinit var btnUnhide: TextView
+    private lateinit var pinStatus: TextView
+    private lateinit var pinInput: EditText
+    private lateinit var btnPin: TextView
     private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,12 +35,14 @@ class SettingsActivity : AppCompatActivity() {
         username = findViewById(R.id.username)
         password = findViewById(R.id.password)
         result = findViewById(R.id.result)
-        btnUnhide = findViewById(R.id.btnUnhide)
+        pinStatus = findViewById(R.id.pinStatus)
+        pinInput = findViewById(R.id.pinInput)
+        btnPin = findViewById(R.id.btnPin)
 
         server.setText(prefs.server)
         username.setText(prefs.username)
         password.setText(prefs.password)
-        updateUnhideLabel()
+        updatePin()
 
         findViewById<TextView>(R.id.btnParse).setOnClickListener { parseLink() }
         findViewById<TextView>(R.id.btnSave).setOnClickListener { testAndSave() }
@@ -48,18 +52,44 @@ class SettingsActivity : AppCompatActivity() {
                 finish()
             }
         }
-        btnUnhide.setOnClickListener {
-            prefs.unhideAll()
-            updateUnhideLabel()
-            show("Listo: todas las categorías se vuelven a mostrar.", ok = true)
+        findViewById<TextView>(R.id.btnKids).setOnClickListener {
+            if (!prefs.isConfigured) {
+                show("Primero guarda tu servidor, usuario y contraseña.", ok = false)
+            } else {
+                startActivity(android.content.Intent(this, KidsActivity::class.java))
+            }
+        }
+        btnPin.setOnClickListener {
+            if (prefs.pinEnabled) {
+                prefs.pinEnabled = false
+                updatePin()
+            } else {
+                val pin = pinInput.text.toString()
+                if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                    pinStatus.text = "Escribe un PIN de 4 números y vuelve a tocar «Activar PIN»."
+                    pinInput.requestFocus()
+                } else {
+                    prefs.pin = pin
+                    prefs.pinEnabled = true
+                    pinInput.setText("")
+                    updatePin()
+                }
+            }
         }
 
         (if (prefs.isConfigured) findViewById<TextView>(R.id.btnSave) else link).requestFocus()
     }
 
-    private fun updateUnhideLabel() {
-        val n = prefs.hiddenCategories.size
-        btnUnhide.text = if (n > 0) "Mostrar categorías ocultas ($n)" else "Mostrar categorías ocultas"
+    private fun updatePin() {
+        if (prefs.pinEnabled) {
+            pinStatus.text = "Activado: se pide al entrar a Jenny, Julio y Ajustes."
+            btnPin.text = "Desactivar PIN"
+            pinInput.visibility = android.view.View.GONE
+        } else {
+            pinStatus.text = "Desactivado. Para activarlo escribe 4 números y toca «Activar PIN»."
+            btnPin.text = "Activar PIN"
+            pinInput.visibility = android.view.View.VISIBLE
+        }
     }
 
     private fun parseLink() {
