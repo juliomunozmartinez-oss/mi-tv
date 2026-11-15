@@ -207,7 +207,13 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun selectTab(t: Tab) {
-        if (t == tab && t != Tab.SEARCH) {
+        if (t == Tab.SEARCH) {
+            startActivity(
+                android.content.Intent(this, SearchActivity::class.java).putExtra(Nav.EXTRA_PROFILE, profile.id)
+            )
+            return
+        }
+        if (t == tab) {
             focusStart()
             return
         }

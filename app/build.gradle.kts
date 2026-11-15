@@ -11,8 +11,8 @@ android {
         applicationId = "com.mitv.player"
         minSdk = 23
         targetSdk = 34
-        versionCode = 3
-        versionName = "3.0"
+        versionCode = 4
+        versionName = "3.1"
     }
 
     // Llave fija para que cada versión nueva se instale encima de la anterior.
@@ -42,7 +42,7 @@ android {
 }
 
 dependencies {
-    val media3 = "1.4.1"
+    val media3 = "1.3.1"
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
@@ -51,5 +51,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+    // Decodificador de audio FFmpeg (AC3, E-AC3, DTS, TrueHD…) para películas y series.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:$media3+2")
     implementation("io.coil-kt:coil:2.7.0")
 }
