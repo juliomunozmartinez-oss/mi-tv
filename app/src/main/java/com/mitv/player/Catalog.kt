@@ -1,7 +1,12 @@
 package com.mitv.player
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -53,15 +58,53 @@ object Catalog {
 
     private val mutex = Mutex()
 
-    /** Carga el catálogo si falta o si cambió la cuenta. Seguro de llamar desde varias pantallas. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var refreshing = false
+
+    /** Cada cuánto se vuelve a descargar el catálogo en segundo plano. */
+    private const val REFRESH_MS = 6 * 60 * 60 * 1000L
+
+    /**
+     * Carga el catálogo si falta o si cambió la cuenta. Seguro de llamar desde varias pantallas.
+     * Primero usa el que está guardado en la tele (abre en segundos) y, si ya es viejo,
+     * lo actualiza en segundo plano. force = descargar ya, sin usar lo guardado.
+     */
     suspend fun ensureLoaded(prefs: Prefs, force: Boolean = false) {
         mutex.withLock {
             if (!force && loadedKey == prefs.accountKey) return
-            load(prefs)
+            if (!force) {
+                val cached = withContext(Dispatchers.IO) { CatalogCache.load(prefs.catalogFile(), prefs.accountKey) }
+                if (cached != null) {
+                    apply(cached, prefs, clearCaches = true)
+                    if (System.currentTimeMillis() - cached.savedAt > REFRESH_MS) refreshInBackground(prefs)
+                    return
+                }
+            }
+            val data = download(prefs)
+            apply(data, prefs, clearCaches = true)
+            withContext(Dispatchers.IO) { runCatching { CatalogCache.save(prefs.catalogFile(), data) } }
         }
     }
 
-    private suspend fun load(prefs: Prefs) = coroutineScope {
+    private fun refreshInBackground(prefs: Prefs) {
+        if (refreshing) return
+        refreshing = true
+        background.launch {
+            try {
+                val data = download(prefs)
+                runCatching { CatalogCache.save(prefs.catalogFile(), data) }
+                withContext(Dispatchers.Main) {
+                    if (loadedKey == data.key) apply(data, prefs, clearCaches = false)
+                }
+            } catch (_: Exception) {
+                // Sin internet o servidor caído: seguimos con lo guardado.
+            } finally {
+                refreshing = false
+            }
+        }
+    }
+
+    private suspend fun download(prefs: Prefs): CatalogData = coroutineScope {
         val client = prefs.client()
         val lc = async { client.categories(Kind.LIVE) }
         val vc = async { client.categories(Kind.MOVIE) }
@@ -69,21 +112,35 @@ object Catalog {
         val l = async { client.liveStreams() }
         val m = async { client.movies() }
         val s = async { client.series() }
+        CatalogData(
+            key = prefs.accountKey,
+            savedAt = System.currentTimeMillis(),
+            liveCats = lc.await(),
+            vodCats = vc.await(),
+            seriesCats = sc.await(),
+            live = l.await(),
+            movies = m.await(),
+            series = s.await(),
+        )
+    }
 
+    private fun apply(d: CatalogData, prefs: Prefs, clearCaches: Boolean) {
         // Canales de México primero; el resto en el orden del proveedor.
-        liveCats = lc.await().sortedBy { if (isMexico(it.name)) 0 else 1 }
-        vodCats = vc.await()
-        seriesCats = sc.await()
-        live = l.await()
-        movies = m.await()
-        series = s.await()
+        liveCats = d.liveCats.sortedBy { if (isMexico(it.name)) 0 else 1 }
+        vodCats = d.vodCats
+        seriesCats = d.seriesCats
+        live = d.live
+        movies = d.movies
+        series = d.series
         liveById = live.associateBy { it.id }
         movieById = movies.associateBy { it.id }
         seriesById = series.associateBy { it.id }
-        seriesDetails.clear()
-        movieDetails.clear()
-        epg.clear()
-        loadedKey = prefs.accountKey
+        if (clearCaches) {
+            seriesDetails.clear()
+            movieDetails.clear()
+            epg.clear()
+        }
+        loadedKey = d.key
 
         if (!prefs.kidsInitialized) {
             prefs.kidsCategories = autoKidsCategories()

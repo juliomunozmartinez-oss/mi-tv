@@ -11,8 +11,8 @@ android {
         applicationId = "com.mitv.player"
         minSdk = 23
         targetSdk = 34
-        versionCode = 4
-        versionName = "3.1"
+        versionCode = 5
+        versionName = "3.2"
     }
 
     // Llave fija para que cada versión nueva se instale encima de la anterior.

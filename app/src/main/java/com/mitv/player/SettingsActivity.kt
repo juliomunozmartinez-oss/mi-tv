@@ -71,6 +71,21 @@ class SettingsActivity : AppCompatActivity() {
             prefs.autoPreview = !prefs.autoPreview
             previewLabel()
         }
+        findViewById<TextView>(R.id.btnRefresh).setOnClickListener {
+            if (!prefs.isConfigured || busy) return@setOnClickListener
+            busy = true
+            show("Descargando el catálogo… puede tardar un poco.", ok = true)
+            lifecycleScope.launch {
+                try {
+                    Catalog.ensureLoaded(prefs, force = true)
+                    show("✔ Catálogo actualizado: ${Catalog.movies.size} películas, ${Catalog.series.size} series, ${Catalog.live.size} canales.", ok = true)
+                } catch (e: Exception) {
+                    show("✖ ${XtreamClient.friendlyError(e)}", ok = false)
+                } finally {
+                    busy = false
+                }
+            }
+        }
         findViewById<TextView>(R.id.btnKids).setOnClickListener {
             if (!prefs.isConfigured) {
                 show("Primero guarda tu servidor, usuario y contraseña.", ok = false)

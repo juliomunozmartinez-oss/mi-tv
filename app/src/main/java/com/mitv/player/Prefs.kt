@@ -4,6 +4,10 @@ import android.content.Context
 
 /** Ajustes generales de la app (compartidos por todos los perfiles). */
 class Prefs(context: Context) {
+    private val appContext = context.applicationContext
+
+    /** Archivo donde se guarda el catálogo para abrir rápido. */
+    fun catalogFile() = java.io.File(appContext.filesDir, "catalog.json")
     private val sp = context.applicationContext.getSharedPreferences("mitv", Context.MODE_PRIVATE)
 
     var server: String
