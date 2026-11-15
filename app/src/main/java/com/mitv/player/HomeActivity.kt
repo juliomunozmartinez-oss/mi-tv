@@ -191,6 +191,8 @@ class HomeActivity : AppCompatActivity() {
                 val v = withContext(Dispatchers.Default) { CatalogView(prefs, profile) }
                 view = v
                 render()
+                // Preparar la búsqueda en segundo plano para que «Buscar» abra al instante.
+                launch(Dispatchers.Default) { runCatching { SearchIndex.get(prefs, profile, v) } }
                 // «Lo más visto» llega después, sin hacer esperar la pantalla.
                 launch {
                     trending = runCatching { Trending.forView(this@HomeActivity, v) }.getOrNull()

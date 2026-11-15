@@ -26,7 +26,6 @@ import kotlinx.coroutines.withContext
 /** Buscar con teclado grande en pantalla, voz y resultados con pósters. */
 class SearchActivity : AppCompatActivity() {
 
-    private data class Entry(val card: Card, val prepared: SearchMatcher.Prepared, val boost: Int)
 
     private lateinit var profile: Profile
     private lateinit var prefs: Prefs
@@ -35,7 +34,7 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var resultsTitle: TextView
     private lateinit var empty: TextView
 
-    private var entries: List<Entry> = emptyList()
+    private var entries: List<SearchIndex.Entry> = emptyList()
     private var suggestions: List<Card> = emptyList()
     private var searchJob: Job? = null
 
@@ -87,24 +86,11 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    /** Prepara todos los títulos que puede ver este perfil (una sola vez). */
+    /** Usa el índice ya preparado desde el Inicio (o lo arma si aún no existe). */
     private fun index() {
-        val v = CatalogView(prefs, profile)
-        val list = ArrayList<Entry>(v.series.size + v.movies.size + v.live.size)
-        v.series.forEach {
-            list += Entry(Card(Kind.SERIES, it.id, it.name, image = it.poster), SearchMatcher.prepare(it.name), 30)
-        }
-        v.movies.forEach {
-            list += Entry(Card(Kind.MOVIE, it.id, it.name, image = it.poster), SearchMatcher.prepare(it.name), 20)
-        }
-        v.live.forEach {
-            list += Entry(Card(Kind.LIVE, it.id, it.name, image = it.icon, logo = true), SearchMatcher.prepare(it.name), 0)
-        }
-        entries = list
-        // Sugerencias mientras no se escribe nada: lo más nuevo, series y películas mezcladas.
-        val s = v.recentSeries.take(12).map { Card(Kind.SERIES, it.id, it.name, image = it.poster) }
-        val m = v.recentMovies.take(12).map { Card(Kind.MOVIE, it.id, it.name, image = it.poster) }
-        suggestions = s.zip(m).flatMap { listOf(it.first, it.second) }
+        val d = SearchIndex.get(prefs, profile)
+        entries = d.entries
+        suggestions = d.suggestions
     }
 
     private fun schedule() {
@@ -122,7 +108,7 @@ class SearchActivity : AppCompatActivity() {
                     .map { it to SearchMatcher.score(q, it.prepared) }
                     .filter { it.second > 0 }
                     .sortedWith(
-                        compareByDescending<Pair<Entry, Int>> { it.second + it.first.boost }
+                        compareByDescending<Pair<SearchIndex.Entry, Int>> { it.second + it.first.boost }
                             .thenBy { it.first.card.title.length }
                     )
                     .take(60)
