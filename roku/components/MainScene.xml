@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="MainScene" extends="Scene">
+    <script type="text/brightscript" uri="MainScene.brs" />
+    <script type="text/brightscript" uri="Utils.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x0B1220FF" />
+        <ProfilesView id="profilesView" visible="false" />
+        <HomeView id="homeView" visible="false" />
+        <DetailView id="detailView" visible="false" />
+        <Video id="video" width="1920" height="1080" visible="false" />
+        <Group id="osd" visible="false">
+            <Rectangle width="1728" height="120" translation="[96,900]" color="0x000000CC" />
+            <Label id="osdText" width="1650" translation="[136,935]" color="0xFFFFFFFF" />
+        </Group>
+        <Timer id="osdTimer" duration="4" repeat="false" />
+    </children>
+</component>

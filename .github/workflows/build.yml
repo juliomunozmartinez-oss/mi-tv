@@ -28,6 +28,11 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/app-debug.apk MiTV.apk
 
+      - name: Empaquetar la app de Roku
+        run: |
+          sed -i "s/^build_version=.*/build_version=${{ github.run_number }}/" roku/manifest
+          cd roku && zip -qr ../MuGaTV-Roku.zip . -x '*.DS_Store'
+
       - uses: actions/upload-artifact@v7
         with:
           name: MiTV-apk
@@ -38,7 +43,9 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: MiTV build ${{ github.run_number }}
-          files: MiTV.apk
+          files: |
+            MiTV.apk
+            MuGaTV-Roku.zip
           make_latest: true
 
       - name: Borrar versiones viejas (dejar las últimas 3)

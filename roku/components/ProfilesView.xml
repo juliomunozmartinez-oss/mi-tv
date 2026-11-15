@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="ProfilesView" extends="Group">
+    <interface>
+        <!-- {type: "profile", profile} o {type: "settings"} -->
+        <field id="chosen" type="assocarray" alwaysNotify="true" />
+        <field id="refresh" type="boolean" alwaysNotify="true" onChange="build" />
+        <field id="takeFocus" type="boolean" alwaysNotify="true" onChange="focusGrid" />
+    </interface>
+    <script type="text/brightscript" uri="ProfilesView.brs" />
+    <script type="text/brightscript" uri="Utils.brs" />
+    <children>
+        <Poster id="logo" uri="pkg:/images/logo_wordmark.png" width="290" height="64" translation="[815,150]" />
+        <Label id="title" text="¿Quién está viendo?" width="1920" translation="[0,270]" horizAlign="center" color="0xFFFFFFFF" />
+        <MarkupGrid id="grid" itemComponentName="ProfileItem" numRows="1" numColumns="6"
+            itemSize="[220,290]" itemSpacing="[40,0]" translation="[0,400]" drawFocusFeedback="false" />
+        <Label id="hint" width="1920" translation="[0,780]" horizAlign="center" color="0x94A3B8FF"
+            text="El último es «Ajustes»: cuenta del proveedor y perfiles" />
+    </children>
+</component>

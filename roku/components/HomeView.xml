@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="HomeView" extends="Group">
+    <interface>
+        <field id="profile" type="assocarray" onChange="start" />
+        <!-- Lo que eligió el usuario: abrir ficha, ver canal, continuar… -->
+        <field id="action" type="assocarray" alwaysNotify="true" />
+        <field id="takeFocus" type="boolean" alwaysNotify="true" onChange="restoreFocus" />
+        <field id="refreshMine" type="boolean" alwaysNotify="true" onChange="onRefreshMine" />
+    </interface>
+    <script type="text/brightscript" uri="HomeView.brs" />
+    <script type="text/brightscript" uri="Utils.brs" />
+    <children>
+        <Poster id="hero" width="1920" height="680" loadDisplayMode="scaleToZoom" />
+        <Poster id="scrim" width="1920" height="680" uri="pkg:/images/scrim.png" />
+        <Rectangle id="bottomBg" width="1920" height="420" translation="[0,660]" color="0x0B1220FF" />
+        <Poster id="logo" uri="pkg:/images/logo_wordmark.png" width="217" height="48" translation="[80,44]" />
+        <LayoutGroup id="tabs" layoutDirection="horiz" itemSpacings="[44]" translation="[360,52]" />
+        <Rectangle id="tabLine" height="4" color="0x3B82F6FF" translation="[360,100]" visible="false" />
+        <Poster id="avatar" width="64" height="64" translation="[1776,36]" />
+        <Label id="heroLabel" translation="[96,200]" color="0x60A5FAFF" />
+        <Label id="heroTitle" translation="[96,232]" width="1100" color="0xFFFFFFFF" />
+        <Label id="heroInfo" translation="[96,300]" width="1100" color="0x94A3B8FF" />
+        <Label id="heroPlot" translation="[96,345]" width="1000" height="140" wrap="true" maxLines="3" color="0xFFFFFFFF" />
+        <RowList id="rows" itemComponentName="PosterItem" translation="[0,560]"
+            itemSize="[1920,400]" numRows="2" rowItemSize="[[200,300]]" rowItemSpacing="[[24,0]]"
+            itemSpacing="[0,30]" showRowLabel="[true]" rowLabelOffset="[[96,12]]" rowLabelColor="0xFFFFFFFF"
+            focusXOffset="[96]" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="fixedFocus" />
+        <Label id="message" width="1920" translation="[0,780]" horizAlign="center" color="0x94A3B8FF" wrap="true" />
+        <Timer id="infoTimer" duration="0.6" repeat="false" />
+    </children>
+</component>

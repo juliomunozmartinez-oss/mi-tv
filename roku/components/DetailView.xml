@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="DetailView" extends="Group">
+    <interface>
+        <field id="profile" type="assocarray" />
+        <field id="item" type="assocarray" onChange="load" />
+        <field id="action" type="assocarray" alwaysNotify="true" />
+        <field id="takeFocus" type="boolean" alwaysNotify="true" onChange="restoreFocus" />
+        <field id="refreshButtons" type="boolean" alwaysNotify="true" onChange="updateButtons" />
+    </interface>
+    <script type="text/brightscript" uri="DetailView.brs" />
+    <script type="text/brightscript" uri="Utils.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x0B1220FF" />
+        <Poster id="backdrop" width="1920" height="1080" loadDisplayMode="scaleToZoom" opacity="0.45" />
+        <Poster id="scrim" width="1920" height="1080" uri="pkg:/images/scrim.png" />
+        <Poster id="cover" width="360" height="540" translation="[96,140]" loadDisplayMode="scaleToZoom" />
+        <Label id="title" translation="[520,140]" width="1300" color="0xFFFFFFFF" wrap="true" maxLines="2" />
+        <Label id="info" translation="[520,250]" width="1300" color="0x94A3B8FF" />
+        <Label id="plot" translation="[520,300]" width="1250" height="220" wrap="true" maxLines="5" color="0xFFFFFFFF" />
+        <ButtonGroup id="buttons" translation="[520,540]" layoutDirection="horiz" itemSpacings="[20]" minWidth="300" />
+        <Label id="epTitle" text="Episodios" translation="[520,680]" color="0x60A5FAFF" visible="false" />
+        <LabelList id="episodes" translation="[520,720]" itemSize="[1300,56]" numRows="6" visible="false"
+            color="0xFFFFFFFF" focusedColor="0x0B1220FF" />
+        <Label id="loading" text="Cargando…" translation="[520,300]" color="0x94A3B8FF" />
+    </children>
+</component>
