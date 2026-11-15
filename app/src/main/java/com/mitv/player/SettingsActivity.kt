@@ -84,6 +84,10 @@ class SettingsActivity : AppCompatActivity() {
             prefs.subtitleSize = (prefs.subtitleSize + 1) % 3
             subLabel()
         }
+        findViewById<TextView>(R.id.btnUpdate).apply {
+            text = "Buscar actualizaciones  ·  tienes la build ${BuildConfig.BUILD_NUMBER}"
+            setOnClickListener { Updater.checkNow(this@SettingsActivity, lifecycleScope) }
+        }
         findViewById<TextView>(R.id.btnRefresh).setOnClickListener {
             if (!prefs.isConfigured || busy) return@setOnClickListener
             busy = true

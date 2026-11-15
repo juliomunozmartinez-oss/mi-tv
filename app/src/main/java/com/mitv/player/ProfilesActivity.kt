@@ -70,6 +70,7 @@ class ProfilesActivity : AppCompatActivity() {
             }
             return
         }
+        Updater.checkOnStart(this, lifecycleScope)
         // Ir cargando el catálogo mientras eligen perfil.
         lifecycleScope.launch { runCatching { Catalog.ensureLoaded(prefs) } }
     }

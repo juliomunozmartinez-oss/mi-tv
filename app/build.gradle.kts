@@ -11,8 +11,11 @@ android {
         applicationId = "com.mitv.player"
         minSdk = 23
         targetSdk = 34
-        versionCode = 13
-        versionName = "4.2"
+        // El número de compilación de GitHub sirve para saber si hay una versión más nueva.
+        val build = (System.getenv("BUILD_NUMBER") ?: "13").toInt()
+        versionCode = build
+        versionName = "4.3 (build $build)"
+        buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 
     // Llave fija para que cada versión nueva se instale encima de la anterior.
@@ -36,6 +39,9 @@ android {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        buildConfig = true
     }
     kotlinOptions {
         jvmTarget = "17"

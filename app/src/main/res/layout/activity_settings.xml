@@ -135,6 +135,12 @@
             android:text="Tamaño de subtítulos: Grande" />
 
         <TextView
+            android:id="@+id/btnUpdate"
+            style="@style/Btn"
+            android:layout_marginTop="12dp"
+            android:text="Buscar actualizaciones de Muga TV" />
+
+        <TextView
             android:id="@+id/btnRefresh"
             style="@style/Btn"
             android:layout_marginTop="12dp"
