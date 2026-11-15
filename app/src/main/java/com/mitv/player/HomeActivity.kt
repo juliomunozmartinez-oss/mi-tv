@@ -340,7 +340,7 @@ class HomeActivity : AppCompatActivity() {
         while (parent is View) {
             if (parent === rows) return rows.getChildAdapterPosition(child)
             child = parent
-            parent = parent.parent
+            parent = (parent as View).parent
         }
         return -1
     }
