@@ -14,6 +14,7 @@
         app:surface_type="surface_view"
         app:show_next_button="false"
         app:show_previous_button="false"
+        app:show_subtitle_button="true"
         app:use_controller="false" />
 
     <ProgressBar

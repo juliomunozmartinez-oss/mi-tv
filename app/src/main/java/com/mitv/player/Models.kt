@@ -67,6 +67,7 @@ data class SeriesDetail(
     val year: String?,
     val rating: String?,
     val seasons: Map<Int, List<Episode>>,
+    val trailer: String? = null,
 ) {
     val allEpisodes: List<Episode> by lazy { seasons.keys.sorted().flatMap { seasons[it].orEmpty() } }
 
@@ -87,6 +88,7 @@ data class MovieDetail(
     val rating: String?,
     val durationSecs: Int,
     val ext: String,
+    val trailer: String? = null,
 )
 
 data class AccountInfo(val status: String, val expDate: Long?)
@@ -96,7 +98,16 @@ data class Profile(val id: String, val name: String, val kids: Boolean, val colo
 }
 
 /** Un programa de la guía de TV en vivo. Horas en segundos (epoch). */
-data class EpgEntry(val title: String, val description: String?, val start: Long, val end: Long) {
+data class EpgEntry(
+    val title: String,
+    val description: String?,
+    val start: Long,
+    val end: Long,
+    /** El proveedor lo tiene grabado (se puede ver aunque ya haya pasado). */
+    val hasArchive: Boolean = false,
+    /** Hora de inicio tal como la manda el servidor ("2026-11-15 20:00:00"), para pedir la grabación. */
+    val startRaw: String? = null,
+) {
     fun progress(nowSec: Long): Float =
         if (end > start) ((nowSec - start).toFloat() / (end - start)).coerceIn(0f, 1f) else 0f
 }

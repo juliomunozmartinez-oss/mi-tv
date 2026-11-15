@@ -48,6 +48,17 @@ object Catalog {
         return list
     }
 
+    /** Programación completa por canal: (cuándo se pidió, programas). Se renueva cada hora. */
+    private val fullEpgCache = HashMap<String, Pair<Long, List<EpgEntry>>>()
+
+    suspend fun fullEpgFor(client: XtreamClient, streamId: String): List<EpgEntry> {
+        val now = System.currentTimeMillis()
+        fullEpgCache[streamId]?.let { (at, list) -> if (now - at < 60 * 60_000) return list }
+        val list = runCatching { client.fullEpg(streamId) }.getOrDefault(emptyList())
+        fullEpgCache[streamId] = now to list
+        return list
+    }
+
     suspend fun movieDetail(client: XtreamClient, movie: Movie): MovieDetail =
         movieDetails[movie.id] ?: client.movieDetail(movie).also { movieDetails[movie.id] = it }
 

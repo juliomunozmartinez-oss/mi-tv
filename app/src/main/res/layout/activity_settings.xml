@@ -129,6 +129,12 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/btnSubSize"
+            style="@style/Btn"
+            android:layout_marginTop="12dp"
+            android:text="Tamaño de subtítulos: Grande" />
+
+        <TextView
             android:id="@+id/btnRefresh"
             style="@style/Btn"
             android:layout_marginTop="12dp"

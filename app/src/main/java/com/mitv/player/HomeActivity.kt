@@ -68,6 +68,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var pEpg: ProgressBar
     private lateinit var heroButtons: View
     private lateinit var btnPlay: TextView
+    private lateinit var btnSleep: TextView
 
     private val tabViews = mutableListOf<TextView>()
     private var tab = Tab.HOME
@@ -135,6 +136,8 @@ class HomeActivity : AppCompatActivity() {
         avatar.background = Ui.circle(profile.color)
         findViewById<TextView>(R.id.avatarInitial).text = profile.initial
         avatar.setOnClickListener { finish() }
+        btnSleep = findViewById(R.id.btnSleep)
+        btnSleep.setOnClickListener { SleepTimer.showDialog(this) { btnSleep.text = SleepTimer.label() } }
 
         btnPlay.setOnClickListener { featured?.let(::featuredPlay) }
         findViewById<View>(R.id.btnInfo).setOnClickListener {
@@ -168,6 +171,7 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (!::profile.isInitialized) return
+        btnSleep.text = SleepTimer.label()
         if (!prefs.isConfigured) {
             showMessage("Falta configurar el servidor.\nRegresa a perfiles y entra a «Ajustes».")
             return
@@ -263,6 +267,9 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         heroButtons.visibility = View.VISIBLE
+        val guide = f.id == GUIDE_ID
+        btnPlay.text = if (guide) "📺  Abrir guía" else "▶  Ver"
+        findViewById<View>(R.id.btnInfo).visibility = if (guide) View.GONE else View.VISIBLE
         setPreview(f.label, f.title, f.meta, f.plot, f.image)
     }
 
@@ -384,6 +391,9 @@ class HomeActivity : AppCompatActivity() {
                 val continueRow = store.continueWatching().filter { v.canSee(it.key) }.map(::resumeCard)
                 if (continueRow.isNotEmpty()) list += Row("Seguir viendo", continueRow, wide = true)
 
+                val favs = store.favorites().filter(v::canSee).mapNotNull(::cardForKey)
+                if (favs.isNotEmpty()) list += Row("Favoritos de ${profile.name}", favs, wide = false)
+
                 list += recommendedRows(v)
 
                 val mine = myListCards(v)
@@ -404,9 +414,17 @@ class HomeActivity : AppCompatActivity() {
                 }
                 hero = pickMovieHero(v.recentMovies.take(30)) ?: pickSeriesHero(v.recentSeries.take(30))
             }
-            Tab.LIVE -> v.liveCats.forEach { c ->
-                val items = v.liveIn(c.id)
-                if (items.isNotEmpty()) list += row(c.name, items, true, ::liveCard)
+            Tab.LIVE -> {
+                v.liveCats.forEach { c ->
+                    val items = v.liveIn(c.id)
+                    if (items.isNotEmpty()) list += row(c.name, items, true, ::liveCard)
+                }
+                if (list.isNotEmpty()) {
+                    hero = Featured(
+                        "TV EN VIVO", Kind.LIVE, GUIDE_ID, "Guía de programación",
+                        "Qué pasa ahora, qué sigue y lo que ya pasó en cada canal", null, null,
+                    )
+                }
             }
             Tab.MOVIES -> {
                 v.movieGenres.forEach { (name, items) ->
@@ -488,9 +506,12 @@ class HomeActivity : AppCompatActivity() {
 
     private fun moreCard(kind: Kind) = Card(kind, "__more__", "Ver todo", image = null, more = true)
 
-    private fun myListCards(v: CatalogView): List<Card> = store.myList.filter(v::canSee).mapNotNull { key ->
+    private fun myListCards(v: CatalogView): List<Card> = store.myList.filter(v::canSee).mapNotNull(::cardForKey)
+
+    /** Tarjeta para una llave "movie:ID", "series:ID" o "live:ID". */
+    private fun cardForKey(key: String): Card? {
         val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-        when (type) {
+        return when (type) {
             "movie" -> Catalog.movieById[id]?.let(::movieCard)
             "series" -> Catalog.seriesById[id]?.let(::seriesCard)
             "live" -> Catalog.liveById[id]?.let(::liveCard)
@@ -555,6 +576,7 @@ class HomeActivity : AppCompatActivity() {
 
     /** Trae la imagen horizontal y la sinopsis del destacado. */
     private fun loadFeaturedDetails(f: Featured) {
+        if (f.id == GUIDE_ID) return
         lifecycleScope.launch {
             runCatching {
                 val client = prefs.client()
@@ -581,6 +603,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun featuredPlay(f: Featured) {
+        if (f.id == GUIDE_ID) {
+            startActivity(android.content.Intent(this, GuideActivity::class.java).putExtra(Nav.EXTRA_PROFILE, profile.id))
+            return
+        }
         if (f.kind == Kind.MOVIE) {
             val start = store.get(Resume.movieKey(f.id))?.positionMs ?: 0L
             Nav.playMovie(this, profile, f.id, start)
@@ -628,5 +654,6 @@ class HomeActivity : AppCompatActivity() {
 
     companion object {
         private const val ROW_LIMIT = 20
+        private const val GUIDE_ID = "__guide__"
     }
 }

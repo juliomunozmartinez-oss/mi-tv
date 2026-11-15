@@ -76,6 +76,25 @@ class PlayerActivity : AppCompatActivity() {
     private var countdown = 0
     private var centerLongPressed = false
     private var recorded = false
+    /** Programa grabado de la guía (catch-up): se reproduce como película. */
+    private var catchupUrl: String? = null
+    private var sleepWarned = false
+    private val sleepCheck = object : Runnable {
+        override fun run() {
+            if (SleepTimer.deadline > 0) {
+                val left = SleepTimer.remainingMs()
+                if (left <= 0) {
+                    sleepNow()
+                    return
+                }
+                if (left <= 60_000 && !sleepWarned) {
+                    sleepWarned = true
+                    showSleepWarning()
+                }
+            }
+            handler.postDelayed(this, 10_000)
+        }
+    }
     private var epgJob: kotlinx.coroutines.Job? = null
 
     private val hideOverlay = Runnable { overlay.visibility = View.GONE }
@@ -131,6 +150,11 @@ class PlayerActivity : AppCompatActivity() {
         startMs = savedInstanceState?.getLong(Nav.EXTRA_START) ?: intent.getLongExtra(Nav.EXTRA_START, 0L)
         when (kind) {
             Kind.LIVE -> {
+                catchupUrl = intent.getStringExtra(Nav.EXTRA_URL)
+                if (catchupUrl != null) {
+                    setupVodControls()
+                    return
+                }
                 channels = Catalog.liveQueue
                 if (channels.isEmpty()) {
                     finish()
@@ -160,15 +184,57 @@ class PlayerActivity : AppCompatActivity() {
         playerView.useController = true
         playerView.controllerShowTimeoutMs = 4000
         playerView.controllerAutoShow = false
-        overlayHint.text = "OK: pausa y controles  ·  ◀ ▶ adelantar o regresar  ·  Atrás: salir"
+        overlayHint.text = "OK: pausa y controles  ·  ◀ ▶ adelantar o regresar  ·  ⚙ subtítulos y audio  ·  Atrás: salir"
+        applySubtitleStyle()
+    }
+
+    /** Letra blanca con fondo oscuro, del tamaño elegido en Ajustes. */
+    private fun applySubtitleStyle() {
+        val factor = when (prefs.subtitleSize) {
+            0 -> 1.0f
+            2 -> 1.6f
+            else -> 1.3f
+        }
+        playerView.subtitleView?.apply {
+            setApplyEmbeddedStyles(false)
+            setStyle(
+                androidx.media3.ui.CaptionStyleCompat(
+                    android.graphics.Color.WHITE, 0xB3000000.toInt(), android.graphics.Color.TRANSPARENT,
+                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null,
+                )
+            )
+            setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * factor)
+        }
+    }
+
+    private fun sleepNow() {
+        SleepTimer.cancel()
+        saveProgress(ended = false)
+        player?.pause()
+        android.widget.Toast.makeText(this, "🌙 Temporizador: se detuvo la reproducción", android.widget.Toast.LENGTH_LONG).show()
+        finishAffinity()
+    }
+
+    private fun showSleepWarning() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🌙 Se detendrá en 1 minuto")
+            .setMessage("¿Siguen despiertos?")
+            .setPositiveButton("Seguir viendo") { _, _ -> SleepTimer.cancel() }
+            .setNegativeButton("Detener ahora") { _, _ -> sleepNow() }
+            .show()
     }
 
     override fun onStart() {
         super.onStart()
         if (!::kind.isInitialized) return
         initPlayer()
+        sleepWarned = false
+        handler.postDelayed(sleepCheck, 10_000)
         when (kind) {
-            Kind.LIVE -> tune(index)
+            Kind.LIVE -> catchupUrl?.let { url ->
+                showInfo(intent.getStringExtra(Nav.EXTRA_TITLE) ?: "Programa grabado", null)
+                play(url, hls = false, positionMs = startMs)
+            } ?: tune(index)
             Kind.MOVIE -> startMovie()
             Kind.SERIES -> startSeries()
         }
@@ -176,7 +242,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (player != null && kind != Kind.LIVE) {
+        if (player != null && (kind != Kind.LIVE || catchupUrl != null)) {
             saveProgress(ended = false)
             startMs = player?.currentPosition ?: startMs
         }
@@ -211,8 +277,16 @@ class PlayerActivity : AppCompatActivity() {
             .setSeekForwardIncrementMs(10_000)
             .build()
         // Preferir audio en español (latino primero) cuando el archivo trae varios idiomas.
+        val subLang = store.subtitleLanguage
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setPreferredAudioLanguages("es-419", "es-MX", "es", "spa")
+            .apply {
+                when {
+                    subLang == null -> Unit // nunca eligió: lo que traiga el archivo por defecto
+                    subLang.isEmpty() -> setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                    else -> setPreferredTextLanguage(subLang)
+                }
+            }
             .build()
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -226,14 +300,26 @@ class PlayerActivity : AppCompatActivity() {
                     }
                     Player.STATE_ENDED -> {
                         loadingView.visibility = View.GONE
-                        if (kind != Kind.LIVE) onVodEnded()
+                        if (kind != Kind.LIVE || catchupUrl != null) onVodEnded()
                     }
                     else -> loadingView.visibility = View.GONE
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                if (kind == Kind.LIVE) handleLiveError(error) else showError(error)
+                if (kind == Kind.LIVE && catchupUrl == null) handleLiveError(error) else showError(error)
+            }
+
+            /** Recordar los subtítulos que eligió este perfil (o que los quitó). */
+            override fun onTrackSelectionParametersChanged(params: androidx.media3.common.TrackSelectionParameters) {
+                if (kind == Kind.LIVE && catchupUrl == null) return
+                if (params.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_TEXT)) {
+                    store.subtitleLanguage = ""
+                    return
+                }
+                val override = params.overrides.values.firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+                val lang = override?.mediaTrackGroup?.getFormat(0)?.language
+                if (!lang.isNullOrBlank()) store.subtitleLanguage = lang
             }
         })
         playerView.player = p
@@ -295,6 +381,10 @@ class PlayerActivity : AppCompatActivity() {
             val epg = Catalog.epgFor(client, ch.id)
             if (channels.getOrNull(index)?.id != ch.id) return@launch
             val now = epg.firstOrNull() ?: return@launch
+            if (SleepTimer.afterCurrent) {
+                // En vivo, «al terminar» = cuando acabe el programa actual.
+                SleepTimer.setMinutes((((now.end * 1000 - System.currentTimeMillis()) / 60_000) + 1).toInt())
+            }
             val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale("es", "MX"))
             fun t(s: Long) = fmt.format(java.util.Date(s * 1000))
             val next = epg.getOrNull(1)
@@ -402,6 +492,10 @@ class PlayerActivity : AppCompatActivity() {
     private fun onVodEnded() {
         saveProgress(ended = true)
         handler.removeCallbacks(saver)
+        if (SleepTimer.afterCurrent) {
+            sleepNow()
+            return
+        }
         val d = series
         val ep = episode
         val next = if (d != null && ep != null) d.next(ep) else null
@@ -482,7 +576,9 @@ class PlayerActivity : AppCompatActivity() {
     // ---------- Control remoto ----------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (kind != Kind.LIVE || nextPanel.visibility == View.VISIBLE) return super.dispatchKeyEvent(event)
+        if (kind != Kind.LIVE || catchupUrl != null || nextPanel.visibility == View.VISIBLE) {
+            return super.dispatchKeyEvent(event)
+        }
 
         val key = event.keyCode
         val isCenter = key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER

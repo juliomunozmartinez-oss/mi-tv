@@ -109,8 +109,11 @@ class ProfileStore(context: Context, profileId: String) {
         val o = JSONObject()
         taste.forEach { (k, v) -> o.put(k, v) }
         val seen = (listOf(itemKey) + seen().filter { it != itemKey }).take(300)
+        val plays = runCatching { JSONObject(sp.getString("plays", "{}") ?: "{}") }.getOrDefault(JSONObject())
+        plays.put(itemKey, plays.optInt(itemKey) + 1)
         sp.edit()
             .putString("taste", o.toString())
+            .putString("plays", plays.toString())
             .putString("seen", seen.joinToString("\n"))
             .putString("last_seen", JSONObject().put("key", itemKey).put("cat", categoryKey).put("title", title).toString())
             .apply()
@@ -129,4 +132,21 @@ class ProfileStore(context: Context, profileId: String) {
         val cat = o.optString("cat").ifBlank { return null }
         return o.optString("title") to cat
     }
+
+    /** Lo que más ha visto este perfil (al menos 2 veces), de más a menos. */
+    fun favorites(limit: Int = 20): List<String> {
+        val o = runCatching { JSONObject(sp.getString("plays", "{}") ?: "{}") }.getOrDefault(JSONObject())
+        return o.keys().asSequence()
+            .map { it to o.optInt(it) }
+            .filter { it.second >= 2 }
+            .sortedByDescending { it.second }
+            .take(limit)
+            .map { it.first }
+            .toList()
+    }
+
+    // ---- Subtítulos: idioma elegido por este perfil ("" = sin subtítulos, null = nunca eligió) ----
+    var subtitleLanguage: String?
+        get() = if (sp.contains("sub_lang")) sp.getString("sub_lang", "") else null
+        set(v) = sp.edit().putString("sub_lang", v ?: "").apply()
 }

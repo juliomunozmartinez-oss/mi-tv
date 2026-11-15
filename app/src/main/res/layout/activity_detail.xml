@@ -84,6 +84,13 @@
                     android:visibility="gone" />
 
                 <TextView
+                    android:id="@+id/btnTrailer"
+                    style="@style/Btn"
+                    android:layout_marginEnd="12dp"
+                    android:text="🎬  Tráiler"
+                    android:visibility="gone" />
+
+                <TextView
                     android:id="@+id/btnList"
                     style="@style/Btn"
                     android:text="+  Mi lista" />

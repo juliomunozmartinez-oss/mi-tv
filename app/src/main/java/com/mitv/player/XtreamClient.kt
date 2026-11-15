@@ -207,6 +207,7 @@ class XtreamClient(server: String, private val username: String, private val pas
             rating = info.str("rating"),
             durationSecs = info.optString("duration_secs").toIntOrNull() ?: 0,
             ext = data?.str("container_extension") ?: movie.ext,
+            trailer = youtubeId(info.str("youtube_trailer") ?: info.str("trailer")),
         )
     }
 
@@ -254,6 +255,7 @@ class XtreamClient(server: String, private val username: String, private val pas
             year = (info.str("releaseDate") ?: info.str("release_date"))?.take(4),
             rating = info.str("rating"),
             seasons = seasons,
+            trailer = youtubeId(info.str("youtube_trailer") ?: info.str("trailer")),
         )
     }
 
@@ -268,6 +270,36 @@ class XtreamClient(server: String, private val username: String, private val pas
             val end = o.optString("stop_timestamp").toLongOrNull() ?: return@mapNotNull null
             EpgEntry(decode64(o.optString("title")) ?: "Programa", decode64(o.optString("description")), start, end)
         }.filter { it.end > now }.sortedBy { it.start }.take(2)
+    }
+
+    /** Programación completa de un canal (varios días, con lo que ya pasó y si está grabado). */
+    suspend fun fullEpg(streamId: String): List<EpgEntry> = withContext(Dispatchers.IO) {
+        val json = getObject(apiUrl("get_simple_data_table", "&stream_id=$streamId"))
+        val arr = json.optJSONArray("epg_listings") ?: return@withContext emptyList()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val start = o.optString("start_timestamp").toLongOrNull() ?: return@mapNotNull null
+            val end = o.optString("stop_timestamp").toLongOrNull() ?: return@mapNotNull null
+            EpgEntry(
+                title = decode64(o.optString("title")) ?: "Programa",
+                description = decode64(o.optString("description")),
+                start = start,
+                end = end,
+                hasArchive = o.optInt("has_archive", 0) == 1,
+                startRaw = o.optString("start").takeIf { it.length >= 16 },
+            )
+        }.sortedBy { it.start }
+    }
+
+    /**
+     * Dirección de un programa grabado (catch-up / timeshift).
+     * Formato Xtream: /timeshift/usuario/contraseña/minutos/AAAA-MM-DD:HH-MM/canal.ts
+     */
+    fun catchupUrl(streamId: String, e: EpgEntry): String? {
+        val raw = e.startRaw ?: return null
+        val start = raw.substring(0, 10) + ":" + raw.substring(11, 13) + "-" + raw.substring(14, 16)
+        val minutes = ((e.end - e.start) / 60).coerceAtLeast(1)
+        return "$baseUrl/timeshift/${enc(username)}/${enc(password)}/$minutes/$start/$streamId.ts"
     }
 
     fun liveUrl(id: String, ext: String) = "$baseUrl/live/${enc(username)}/${enc(password)}/$id.$ext"
@@ -309,6 +341,13 @@ class XtreamClient(server: String, private val username: String, private val pas
             return null
         }
     }
+}
+
+/** Saca el código de un video de YouTube de un enlace o lo regresa tal cual si ya es el código. */
+private fun youtubeId(raw: String?): String? {
+    val s = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    Regex("""(?:v=|youtu\.be/|embed/|shorts/)([A-Za-z0-9_-]{11})""").find(s)?.let { return it.groupValues[1] }
+    return s.takeIf { Regex("[A-Za-z0-9_-]{11}").matches(it) }
 }
 
 /** La guía viene en Base64; si no lo es, se usa el texto tal cual. */

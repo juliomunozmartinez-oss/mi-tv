@@ -79,4 +79,9 @@ class Prefs(context: Context) {
 
     fun setCategoryOrder(kind: Kind, keys: List<String>) =
         sp.edit().putString("order_${kind.name}", keys.joinToString("\n")).apply()
+
+    // ---- Tamaño de subtítulos: 0 normal, 1 grande, 2 muy grande ----
+    var subtitleSize: Int
+        get() = sp.getInt("sub_size", 1)
+        set(v) = sp.edit().putInt("sub_size", v).apply()
 }

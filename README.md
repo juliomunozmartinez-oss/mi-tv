@@ -6,7 +6,7 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 > Tus datos de acceso **no** están en este código: se escriben dentro de la app,
 > en la pantalla **Ajustes**, y se guardan solo en tu tele.
 
-## Qué hace (versión 3)
+## Qué hace (versión 4)
 - **Perfiles**: Jenny y Julio (adultos), Cam y Maju (infantiles). PIN opcional para adultos, apagado de inicio.
 - **Inicio estilo streaming**: un destacado grande arriba y filas de pósters: Seguir viendo, Mi lista,
   Canales de México, Películas recién agregadas, Series con episodios nuevos y categorías.
@@ -24,6 +24,13 @@ Se conecta a cualquier servidor tipo **Xtream Codes** (servidor + usuario + cont
 - **Guía de programación** en TV en vivo: qué pasa ahora y qué sigue (si el proveedor la tiene).
 - **Ajustes → Perfiles**: renombrar, color, infantil/adulto, agregar (hasta 8) y borrar.
 - **Ajustes → Ordenar y ocultar categorías** para los perfiles de adultos.
+- **Tráiler** en la ficha (abre YouTube en la tele) cuando el título lo trae.
+- **Guía de programación** (TV en vivo → «Abrir guía»): un renglón por canal con lo que pasó, lo de ahora y lo que sigue.
+- **Catch-up**: ver programas que ya pasaron o reiniciar uno desde el inicio, en canales que el proveedor tenga grabados (⟲).
+- **Favoritos de…**: lo que más ve cada perfil.
+- **Temporizador para dormir** (🌙 arriba a la derecha): 30/60/90 min o al terminar lo que se está viendo.
+- **Subtítulos**: se eligen en OK → ⚙; cada perfil recuerda su elección; tamaño en Ajustes.
+- **Ver todo** en cada fila y pestaña **Mi lista** (mantener OK sobre un póster para agregarlo).
 - Diseño propio, azul oscuro y minimalista. No usa logotipos ni diseños de otras plataformas.
 
 ## Instalar en el Chromecast

@@ -71,6 +71,19 @@ class SettingsActivity : AppCompatActivity() {
             prefs.autoPreview = !prefs.autoPreview
             previewLabel()
         }
+        val btnSubSize = findViewById<TextView>(R.id.btnSubSize)
+        fun subLabel() {
+            btnSubSize.text = "Tamaño de subtítulos: " + when (prefs.subtitleSize) {
+                0 -> "Normal"
+                2 -> "Muy grande"
+                else -> "Grande"
+            }
+        }
+        subLabel()
+        btnSubSize.setOnClickListener {
+            prefs.subtitleSize = (prefs.subtitleSize + 1) % 3
+            subLabel()
+        }
         findViewById<TextView>(R.id.btnRefresh).setOnClickListener {
             if (!prefs.isConfigured || busy) return@setOnClickListener
             busy = true

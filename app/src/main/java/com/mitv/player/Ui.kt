@@ -79,6 +79,8 @@ object Nav {
     const val EXTRA_EPISODE = "episode"
     const val EXTRA_START = "start"
     const val EXTRA_INDEX = "index"
+    const val EXTRA_URL = "url"
+    const val EXTRA_TITLE = "title"
 
     fun home(ctx: Context, profile: Profile) =
         ctx.startActivity(Intent(ctx, HomeActivity::class.java).putExtra(EXTRA_PROFILE, profile.id))
@@ -87,6 +89,14 @@ object Nav {
         ctx.startActivity(
             Intent(ctx, DetailActivity::class.java)
                 .putExtra(EXTRA_PROFILE, profile.id).putExtra(EXTRA_KIND, kind.name).putExtra(EXTRA_ID, id)
+        )
+
+    /** Reproduce una dirección directa (programa grabado de la guía). */
+    fun playUrl(ctx: Context, profile: Profile, url: String, title: String) =
+        ctx.startActivity(
+            Intent(ctx, PlayerActivity::class.java)
+                .putExtra(EXTRA_PROFILE, profile.id).putExtra(EXTRA_KIND, Kind.LIVE.name)
+                .putExtra(EXTRA_URL, url).putExtra(EXTRA_TITLE, title)
         )
 
     fun playLive(ctx: Context, profile: Profile, channels: List<LiveChannel>, index: Int) {

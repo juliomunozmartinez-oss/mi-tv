@@ -30,6 +30,7 @@ class DetailActivity : AppCompatActivity() {
     private lateinit var btnPlay: TextView
     private lateinit var btnRestart: TextView
     private lateinit var btnList: TextView
+    private lateinit var btnTrailer: TextView
     private lateinit var seriesBox: View
     private lateinit var seasonsList: RecyclerView
     private lateinit var episodesList: RecyclerView
@@ -64,6 +65,7 @@ class DetailActivity : AppCompatActivity() {
         btnPlay = findViewById(R.id.btnPlay)
         btnRestart = findViewById(R.id.btnRestart)
         btnList = findViewById(R.id.btnList)
+        btnTrailer = findViewById(R.id.btnTrailer)
         seriesBox = findViewById(R.id.seriesBox)
         seasonsList = findViewById(R.id.seasons)
         episodesList = findViewById(R.id.episodes)
@@ -89,6 +91,30 @@ class DetailActivity : AppCompatActivity() {
         if (!::store.isInitialized || isFinishing) return
         updatePlayButtons()
         if (kind == Kind.SERIES && seriesDetail != null && season >= 0) showSeason(season, focus = false)
+    }
+
+    /** Botón de tráiler: abre YouTube en la tele (si el título trae tráiler). */
+    private fun showTrailer(youtubeId: String?) {
+        if (youtubeId == null) {
+            btnTrailer.visibility = View.GONE
+            return
+        }
+        btnTrailer.visibility = View.VISIBLE
+        btnTrailer.setOnClickListener {
+            val uri = android.net.Uri.parse("https://www.youtube.com/watch?v=$youtubeId")
+            val tv = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                .setPackage("com.google.android.youtube.tv")
+            val any = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+            try {
+                startActivity(tv)
+            } catch (e: android.content.ActivityNotFoundException) {
+                try {
+                    startActivity(any)
+                } catch (e2: android.content.ActivityNotFoundException) {
+                    Toast.makeText(this, "No encontré YouTube en este aparato", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     private fun updateListButton() {
@@ -120,6 +146,7 @@ class DetailActivity : AppCompatActivity() {
                     meta.text = listOfNotNull(d.year, Ui.ratingText(d.rating), Ui.duration(d.durationSecs), d.genre)
                         .joinToString("  ·  ")
                     d.backdrop?.let { backdrop.load(it) { crossfade(true) } }
+                    showTrailer(d.trailer)
                 }
             loading.visibility = View.GONE
         }
@@ -148,6 +175,7 @@ class DetailActivity : AppCompatActivity() {
                 ).joinToString("  ·  ")
                 d.backdrop?.let { backdrop.load(it) { crossfade(true) } }
                 btnPlay.isEnabled = true
+                showTrailer(d.trailer)
                 setupSeasons(d)
                 updatePlayButtons()
             }.onFailure { e ->
