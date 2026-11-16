@@ -2,6 +2,9 @@ sub init()
     m.grid = m.top.findNode("grid")
     m.top.findNode("title").font = "font:LargeBoldSystemFont"
     m.grid.observeField("itemSelected", "onSelected")
+    ' Mostrar la versión instalada para saber si ya se actualizó.
+    info = CreateObject("roAppInfo")
+    m.top.findNode("hint").text = "El último es «Ajustes»: cuenta del proveedor y perfiles     ·     versión " + info.GetVersion()
     build()
 end sub
 
