@@ -1,6 +1,7 @@
 name: Lo más visto
 
-# Todos los días baja de TMDB las películas y series en tendencia (en español de México)
+# Todos los días baja de TMDB las películas y series más populares en México
+# (disponibles en streaming en México, ordenadas por popularidad, en español)
 # y las publica en la versión «trending» del repositorio. La app las lee una vez al día.
 on:
   schedule:
@@ -27,10 +28,10 @@ jobs:
             exit 1
           fi
           get() { curl -fsS -H "Authorization: Bearer $TMDB_TOKEN" "https://api.themoviedb.org/3/$1"; }
-          get "trending/movie/week?language=es-MX&page=1" > m1.json
-          get "trending/movie/week?language=es-MX&page=2" > m2.json
-          get "trending/tv/week?language=es-MX&page=1" > t1.json
-          get "trending/tv/week?language=es-MX&page=2" > t2.json
+          get "discover/movie?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=1" > m1.json
+          get "discover/movie?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=2" > m2.json
+          get "discover/tv?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=1" > t1.json
+          get "discover/tv?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=2" > t2.json
           jq -n --slurpfile m1 m1.json --slurpfile m2 m2.json --slurpfile t1 t1.json --slurpfile t2 t2.json '{
             updated: (now | todate),
             movies: [ ($m1[0].results + $m2[0].results)[] | {t: .title, o: .original_title, y: ((.release_date // "")[0:4])} ],

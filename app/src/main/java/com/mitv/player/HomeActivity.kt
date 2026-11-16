@@ -518,7 +518,7 @@ class HomeActivity : AppCompatActivity() {
                         t.series.getOrNull(i)?.let { mixed += seriesCard(it) }
                         t.movies.getOrNull(i)?.let { mixed += movieCard(it) }
                     }
-                    if (mixed.isNotEmpty()) list += top10("🔥 Lo más visto hoy", mixed)
+                    if (mixed.isNotEmpty()) list += top10("🔥 Top 10 en México hoy", mixed)
                 }
 
                 val favs = store.favorites().filter(v::canSee).mapNotNull(::cardForKey)
@@ -555,7 +555,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.MOVIES -> {
                 trending?.movies?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🔥 Películas más vistas", it.map(::movieCard))
+                    list += top10("🔥 Top 10 películas en México", it.map(::movieCard))
                 }
                 v.movieGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
@@ -568,7 +568,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.SERIES -> {
                 trending?.series?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🔥 Series más vistas", it.map(::seriesCard))
+                    list += top10("🔥 Top 10 series en México", it.map(::seriesCard))
                 }
                 v.seriesGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }
