@@ -209,8 +209,7 @@ class HomeActivity : AppCompatActivity() {
                     val fresh = runCatching { Trending.forView(this@HomeActivity, prefs, profile, v) }.getOrNull()
                     trending = fresh
                     val changed = fresh != null && !fresh.isEmpty &&
-                        (before == null || before.movies != fresh.movies || before.series != fresh.series ||
-                            before.mxMovies != fresh.mxMovies || before.mxSeries != fresh.mxSeries)
+                        (before == null || before.movies != fresh.movies || before.series != fresh.series)
                     // Si llegó después, se agrega la fila sin mover el foco.
                     if (changed && tab in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES)) refreshKeepingPlace()
                 }
@@ -536,7 +535,7 @@ class HomeActivity : AppCompatActivity() {
                         t.series.getOrNull(i)?.let { mixed += seriesCard(it) }
                         t.movies.getOrNull(i)?.let { mixed += movieCard(it) }
                     }
-                    if (mixed.isNotEmpty()) list += top10("🔥 Top 10 en México hoy", mixed)
+                    if (mixed.isNotEmpty()) list += top10("🔥 Top 10 de la semana", mixed)
                 }
 
                 val favs = store.favorites().filter(v::canSee).mapNotNull(::cardForKey)
@@ -580,10 +579,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.MOVIES -> {
                 trending?.movies?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🔥 Top 10 películas en México", it.map(::movieCard))
-                }
-                trending?.mxMovies?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🇲🇽 Top 10 películas mexicanas", it.map(::movieCard))
+                    list += top10("🔥 Top 10 películas de la semana", it.map(::movieCard))
                 }
                 v.movieGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
@@ -596,10 +592,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.SERIES -> {
                 trending?.series?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🔥 Top 10 series en México", it.map(::seriesCard))
-                }
-                trending?.mxSeries?.takeIf { it.isNotEmpty() }?.let {
-                    list += top10("🇲🇽 Top 10 series mexicanas", it.map(::seriesCard))
+                    list += top10("🔥 Top 10 series de la semana", it.map(::seriesCard))
                 }
                 v.seriesGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }

@@ -20,8 +20,6 @@ object Trending {
     class Result(
         val movies: List<Movie>,
         val series: List<Series>,
-        val mxMovies: List<Movie> = emptyList(),
-        val mxSeries: List<Series> = emptyList(),
     ) {
         val isEmpty get() = movies.isEmpty() && series.isEmpty()
     }
@@ -38,8 +36,6 @@ object Trending {
         val json = load(File(ctx.filesDir, "trending.json")) ?: return@withContext Result(emptyList(), emptyList())
         val movies = entries(json, "movies")
         val series = entries(json, "series")
-        val mxMovies = entries(json, "mx_movies")
-        val mxSeries = entries(json, "mx_series")
         val result = withContext(Dispatchers.Default) {
             // Reusa los títulos ya preparados para Buscar (mucho más rápido que volver a procesarlos).
             val idx = SearchIndex.get(prefs, profile, v)
@@ -53,10 +49,7 @@ object Trending {
                     else -> Unit
                 }
             }
-            Result(
-                pick(movies, movieByKey), pick(series, seriesByKey),
-                pick(mxMovies, movieByKey), pick(mxSeries, seriesByKey),
-            )
+            Result(pick(movies, movieByKey), pick(series, seriesByKey))
         }
         memo[profile.id] = result
         result
@@ -73,9 +66,9 @@ object Trending {
     }
 
     private fun load(file: File): JSONObject? {
-        // Si el guardado es de antes de las listas mexicanas, bajarlo de nuevo.
+        // Si el guardado es de la lista anterior, bajarlo de nuevo.
         val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < MAX_AGE_MS &&
-            runCatching { file.readText().contains("\"mx_movies\"") }.getOrDefault(false)
+            runCatching { file.readText().contains("\"src\": \"week\"") }.getOrDefault(false)
         if (!fresh) {
             runCatching {
                 val conn = URL(URL_JSON).openConnection() as HttpURLConnection

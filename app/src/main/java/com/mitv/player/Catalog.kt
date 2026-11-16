@@ -245,9 +245,13 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
 
     private fun ok(c: Category) = (allowed == null || c.key in allowed) && c.key !in hidden && c.key !in blocked
 
-    val liveCats = Catalog.ordered(Kind.LIVE, prefs).filter(::ok)
-    val vodCats = Catalog.ordered(Kind.MOVIE, prefs).filter(::ok)
-    val seriesCats = Catalog.ordered(Kind.SERIES, prefs).filter(::ok)
+    /** En los perfiles infantiles, las categorías infantiles van primero. */
+    private fun kidsFirst(cats: List<Category>) =
+        if (profile.kids) cats.sortedBy { if (Catalog.isKids(it.name)) 0 else 1 } else cats
+
+    val liveCats = kidsFirst(Catalog.ordered(Kind.LIVE, prefs).filter(::ok))
+    val vodCats = kidsFirst(Catalog.ordered(Kind.MOVIE, prefs).filter(::ok))
+    val seriesCats = kidsFirst(Catalog.ordered(Kind.SERIES, prefs).filter(::ok))
 
     private val liveIds = liveCats.map { it.id }.toSet()
     private val vodIds = vodCats.map { it.id }.toSet()

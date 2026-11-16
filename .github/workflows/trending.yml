@@ -1,7 +1,6 @@
 name: Lo más visto
 
-# Todos los días baja de TMDB las películas y series más populares en México
-# (disponibles en streaming en México, ordenadas por popularidad, en español)
+# Todos los días baja de TMDB las películas y series en tendencia (en español de México)
 # y las publica en la versión «trending» del repositorio. La app las lee una vez al día.
 on:
   schedule:
@@ -28,25 +27,17 @@ jobs:
             exit 1
           fi
           get() { curl -fsS -H "Authorization: Bearer $TMDB_TOKEN" "https://api.themoviedb.org/3/$1"; }
-          get "discover/movie?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=1" > m1.json
-          get "discover/movie?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=2" > m2.json
-          get "discover/tv?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=1" > t1.json
-          get "discover/tv?language=es-MX&watch_region=MX&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=2" > t2.json
-          # Lo más popular hecho en México (películas y series de origen mexicano).
-          for p in 1 2 3; do
-            get "discover/movie?language=es-MX&with_origin_country=MX&sort_by=popularity.desc&page=$p" > xm$p.json
-            get "discover/tv?language=es-MX&with_origin_country=MX&sort_by=popularity.desc&page=$p" > xt$p.json
-          done
-          jq -n --slurpfile m1 m1.json --slurpfile m2 m2.json --slurpfile t1 t1.json --slurpfile t2 t2.json \
-            --slurpfile xm1 xm1.json --slurpfile xm2 xm2.json --slurpfile xm3 xm3.json \
-            --slurpfile xt1 xt1.json --slurpfile xt2 xt2.json --slurpfile xt3 xt3.json '{
+          get "trending/movie/week?language=es-MX&page=1" > m1.json
+          get "trending/movie/week?language=es-MX&page=2" > m2.json
+          get "trending/tv/week?language=es-MX&page=1" > t1.json
+          get "trending/tv/week?language=es-MX&page=2" > t2.json
+          jq -n --slurpfile m1 m1.json --slurpfile m2 m2.json --slurpfile t1 t1.json --slurpfile t2 t2.json '{
             updated: (now | todate),
+            src: "week",
             movies: [ ($m1[0].results + $m2[0].results)[] | {t: .title, o: .original_title, y: ((.release_date // "")[0:4])} ],
-            series: [ ($t1[0].results + $t2[0].results)[] | {t: .name, o: .original_name, y: ((.first_air_date // "")[0:4])} ],
-            mx_movies: [ ($xm1[0].results + $xm2[0].results + $xm3[0].results)[] | {t: .title, o: .original_title, y: ((.release_date // "")[0:4])} ],
-            mx_series: [ ($xt1[0].results + $xt2[0].results + $xt3[0].results)[] | {t: .name, o: .original_name, y: ((.first_air_date // "")[0:4])} ]
+            series: [ ($t1[0].results + $t2[0].results)[] | {t: .name, o: .original_name, y: ((.first_air_date // "")[0:4])} ]
           }' > trending.json
-          echo "Películas: $(jq '.movies | length' trending.json) · Series: $(jq '.series | length' trending.json) · Mexicanas: $(jq '.mx_movies | length' trending.json) / $(jq '.mx_series | length' trending.json)"
+          echo "Películas: $(jq '.movies | length' trending.json) · Series: $(jq '.series | length' trending.json)"
 
       - name: Publicar
         uses: softprops/action-gh-release@v3
