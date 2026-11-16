@@ -140,9 +140,18 @@ sub onLoginResult(msg as object)
     ok = false
     if res.data <> invalid and res.data.user_info <> invalid then ok = (ToStr(res.data.user_info.auth) = "1")
     if ok then
+        ' Si solo funcionó sin «s», guardar el servidor con http:// para todo lo demás.
+        if res.usedHttp = true then
+            server = Store_Get("server", "")
+            if LCase(Left(server, 8)) = "https://" then Store_Set("server", "http://" + Mid(server, 9))
+        end if
         message("✔ Conectado", "La cuenta funciona. Elige un perfil.")
+    else if res.data <> invalid then
+        message("✖ Usuario o contraseña incorrectos", "El servidor respondió, pero no aceptó la cuenta. Revisa el enlace en «Ajustes».")
     else
-        message("✖ No se pudo conectar", "Revisa el servidor (http o https y el puerto), usuario y contraseña. Puedes cambiarlos en «Ajustes».")
+        detail = "Código " + ToStr(res.code)
+        if ToStr(res.reason) <> "" then detail = detail + ": " + ToStr(res.reason)
+        message("✖ No se pudo conectar", "Revisa el servidor (http o https y el puerto). Puedes cambiarlo en «Ajustes»." + Chr(10) + Chr(10) + "Detalle: " + detail)
     end if
 end sub
 

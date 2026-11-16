@@ -5,10 +5,19 @@ end sub
 ' request: { id, kind: "json" | "items", url, itemKind: "live"|"movie"|"series", sort, kids }
 sub fetchData()
     req = m.top.request
-    text = HttpGet(req.url)
+    r = HttpGet(req.url)
+    usedHttp = false
+    ' Si https falla (certificado o conexión), intentar con http.
+    if r.body = invalid and LCase(Left(req.url, 8)) = "https://" then
+        r2 = HttpGet("http://" + Mid(req.url, 9))
+        if r2.body <> invalid then
+            r = r2
+            usedHttp = true
+        end if
+    end if
     data = invalid
-    if text <> invalid and text <> "" then data = ParseJson(text)
-    res = { id: req.id, kind: req.kind, ok: data <> invalid }
+    if r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
+    res = { id: req.id, kind: req.kind, ok: data <> invalid, code: r.code, reason: r.reason, usedHttp: usedHttp }
     if req.kind = "items" then
         res.content = BuildItems(data, req.itemKind)
     else
@@ -17,7 +26,8 @@ sub fetchData()
     m.top.response = res
 end sub
 
-function HttpGet(url as string) as dynamic
+' Regresa { body (o invalid), code, reason } para poder explicar los errores.
+function HttpGet(url as string) as object
     xfer = CreateObject("roUrlTransfer")
     xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
     xfer.InitClientCertificates()
@@ -27,14 +37,15 @@ function HttpGet(url as string) as dynamic
     xfer.SetUrl(url)
     port = CreateObject("roMessagePort")
     xfer.SetMessagePort(port)
-    if not xfer.AsyncGetToString() then return invalid
-    msg = wait(45000, port)
+    if not xfer.AsyncGetToString() then return { body: invalid, code: -1, reason: "no se pudo iniciar la conexión" }
+    msg = wait(30000, port)
     if type(msg) = "roUrlEvent" then
-        if msg.GetResponseCode() = 200 then return msg.GetString()
-        return invalid
+        code = msg.GetResponseCode()
+        if code = 200 then return { body: msg.GetString(), code: code, reason: "" }
+        return { body: invalid, code: code, reason: msg.GetFailureReason() }
     end if
     xfer.AsyncCancel()
-    return invalid
+    return { body: invalid, code: -28, reason: "el servidor no respondió a tiempo" }
 end function
 
 ' Convierte la lista del servidor en tarjetas (ContentNode) para las filas.
