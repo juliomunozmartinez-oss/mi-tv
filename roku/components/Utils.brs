@@ -49,8 +49,25 @@ function NormalizeServer(raw as string) as string
     return s
 end function
 
+' Codifica texto para una dirección web. (No usa roUrlTransfer: Roku no lo permite
+' en la parte que dibuja la pantalla y la app se congelaba.)
 function Enc(s as string) as string
-    return CreateObject("roUrlTransfer").Escape(s)
+    out = ""
+    for i = 1 to Len(s)
+        c = Mid(s, i, 1)
+        a = Asc(c)
+        safe = (a >= 48 and a <= 57) or (a >= 65 and a <= 90) or (a >= 97 and a <= 122)
+        if safe or c = "-" or c = "_" or c = "." or c = "~" then
+            out = out + c
+        else if a < 256 then
+            h = UCase(StrI(a, 16))
+            if Len(h) < 2 then h = "0" + h
+            out = out + "%" + h
+        else
+            out = out + c
+        end if
+    end for
+    return out
 end function
 
 function ApiUrl(action as string, extra as string) as string
