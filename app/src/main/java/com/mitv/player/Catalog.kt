@@ -140,9 +140,11 @@ object Catalog {
         // Primero México, luego canales de cine, luego el resto en el orden del proveedor.
         liveCats = d.liveCats.sortedBy {
             when {
-                isMexico(it.name) -> 0
-                isCinema(it.name) -> 1
-                else -> 2
+                // «TV México», «Mexicanos»… antes que categorías que solo dicen «MX» (p. ej. deportes).
+                mexicoMainRegex.containsMatchIn(it.name) -> 0
+                isMexico(it.name) -> 1
+                isCinema(it.name) -> 2
+                else -> 3
             }
         }
         vodCats = d.vodCats
@@ -178,6 +180,8 @@ object Catalog {
         """infantil|kids|ni[ñn][oa]s|animad|animaci[oó]n|caricatura|cartoon|junior|nick|baby|beb[eé]s|peques|discovery\s*k|familiar""",
         RegexOption.IGNORE_CASE,
     )
+
+    private val mexicoMainRegex = Regex("""m[eé]xico|mexican|nacional|azteca|televisa""", RegexOption.IGNORE_CASE)
 
     private val cinemaRegex = Regex(
         """cine|movie|pel[ií]cula|hbo|max|cinemax|star|tnt|fox|universal|paramount|premium|golden|amc|sony|warner|space|studio|film""",
