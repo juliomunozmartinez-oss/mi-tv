@@ -71,6 +71,11 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var heroButtons: View
     private lateinit var btnPlay: TextView
     private lateinit var btnSleep: TextView
+    private lateinit var ambient: View
+    private lateinit var topBar: View
+    private var ambientColor = 0xFF0B1220.toInt()
+    private var navHidden = false
+    private var ambientJob: Job? = null
 
     private val tabViews = mutableListOf<TextView>()
     private var tab = Tab.HOME
@@ -108,6 +113,9 @@ class HomeActivity : AppCompatActivity() {
         pEpg = findViewById(R.id.epgProgress)
         heroButtons = findViewById(R.id.heroButtons)
         btnPlay = findViewById(R.id.btnPlay)
+        ambient = findViewById(R.id.ambient)
+        topBar = findViewById(R.id.topBar)
+        paintAmbient(ambientColor)
 
         adapter = RowsAdapter(
             onCard = { row, i -> Nav.open(this, profile, row, i) },
@@ -160,6 +168,7 @@ class HomeActivity : AppCompatActivity() {
                 if (focused != null && !isInTopBar(focused)) {
                     rows.scrollToPosition(0)
                     showFeatured()
+                    setNavHidden(false)
                     tabViews[tab.ordinal].requestFocus()
                 } else {
                     finish()
@@ -270,6 +279,7 @@ class HomeActivity : AppCompatActivity() {
         pPlot.visibility = if (plot.isNullOrBlank()) View.GONE else View.VISIBLE
         pEpg.visibility = View.GONE
         if (image == null) backdrop.setImageDrawable(null) else backdrop.load(image) { crossfade(true) }
+        updateAmbient(image)
     }
 
     private fun showFeatured() {
@@ -290,6 +300,8 @@ class HomeActivity : AppCompatActivity() {
 
     private fun onCardFocused(row: Row, index: Int) {
         val rowPos = adapter.indexOf(row)
+        // La barra de arriba se esconde al bajar de la primera fila.
+        setNavHidden(rowPos >= 1)
         if (!prefs.autoPreview || tab == Tab.SEARCH) return
         val card = row.cards.getOrNull(index) ?: return
         val key = "${card.kind}:${card.id}"
@@ -317,6 +329,7 @@ class HomeActivity : AppCompatActivity() {
                 val target = rowPos + if (down) 1 else -1
                 when {
                     target < 0 -> {
+                        setNavHidden(false)
                         if (heroButtons.visibility == View.VISIBLE && previewArea.visibility == View.VISIBLE) {
                             showFeatured()
                             btnPlay.requestFocus()
@@ -505,7 +518,7 @@ class HomeActivity : AppCompatActivity() {
                         t.series.getOrNull(i)?.let { mixed += seriesCard(it) }
                         t.movies.getOrNull(i)?.let { mixed += movieCard(it) }
                     }
-                    if (mixed.isNotEmpty()) list += row("🔥 Lo más visto hoy", mixed, false)
+                    if (mixed.isNotEmpty()) list += top10("🔥 Lo más visto hoy", mixed)
                 }
 
                 val favs = store.favorites().filter(v::canSee).mapNotNull(::cardForKey)
@@ -542,7 +555,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.MOVIES -> {
                 trending?.movies?.takeIf { it.isNotEmpty() }?.let {
-                    list += row("🔥 Películas más vistas", it, false, ::movieCard)
+                    list += top10("🔥 Películas más vistas", it.map(::movieCard))
                 }
                 v.movieGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::movieCard)) { v.moviesOfGenre(name).map(::movieCard) }
@@ -555,7 +568,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Tab.SERIES -> {
                 trending?.series?.takeIf { it.isNotEmpty() }?.let {
-                    list += row("🔥 Series más vistas", it, false, ::seriesCard)
+                    list += top10("🔥 Series más vistas", it.map(::seriesCard))
                 }
                 v.seriesGenres.forEach { (name, items) ->
                     list += genreRow(name, items.map(::seriesCard)) { v.seriesOfGenre(name).map(::seriesCard) }
@@ -619,6 +632,13 @@ class HomeActivity : AppCompatActivity() {
         if (items.size <= ROW_LIMIT) return Row(title, items.map(toCard), wide)
         val shown = items.take(ROW_LIMIT).map(toCard)
         return Row(title, shown + moreCard(shown.first().kind), wide) { items.map(toCard) }
+    }
+
+    /** Fila «Top 10» con números grandes (y «Ver todo» con el resto del top). */
+    private fun top10(title: String, cards: List<Card>): Row {
+        val ranked = cards.take(10).mapIndexed { i, c -> c.copy(rank = i + 1) }
+        return if (cards.size > 10) Row(title, ranked + moreCard(cards.first().kind), false) { cards }
+        else Row(title, ranked, false)
     }
 
     /** Fila por tipo: siempre ofrece «Ver todo», que busca en todo el catálogo. */
@@ -768,6 +788,55 @@ class HomeActivity : AppCompatActivity() {
             }
             adapter.submit(result)
             if (result.isEmpty()) showMessage("Sin resultados para «$q».") else message.visibility = View.GONE
+        }
+    }
+
+    // ---------- Diseño: fondo ambiental y barra que se esconde ----------
+
+    private fun setNavHidden(hide: Boolean) {
+        if (hide == navHidden) return
+        navHidden = hide
+        topBar.animate().translationY(if (hide) -topBar.height.toFloat() else 0f)
+            .alpha(if (hide) 0f else 1f).setDuration(220).start()
+    }
+
+    /** Toma el color dominante de la imagen y lo pasa suavemente al fondo. */
+    private fun updateAmbient(image: String?) {
+        ambientJob?.cancel()
+        if (image == null) {
+            animateAmbient(0xFF0B1220.toInt())
+            return
+        }
+        ambientJob = lifecycleScope.launch {
+            val req = coil.request.ImageRequest.Builder(this@HomeActivity)
+                .data(image).size(64).allowHardware(false).build()
+            val drawable = runCatching { coil.Coil.imageLoader(this@HomeActivity).execute(req).drawable }.getOrNull()
+            val bmp = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap ?: return@launch
+            val color = withContext(Dispatchers.Default) {
+                val p = androidx.palette.graphics.Palette.from(bmp).generate()
+                p.getDarkVibrantColor(p.getVibrantColor(p.getDarkMutedColor(0xFF1E3A8A.toInt())))
+            }
+            animateAmbient(color)
+        }
+    }
+
+    private fun animateAmbient(to: Int) {
+        val from = ambientColor
+        ambientColor = to
+        android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), from, to).apply {
+            duration = 500
+            addUpdateListener { paintAmbient(it.animatedValue as Int) }
+            start()
+        }
+    }
+
+    private fun paintAmbient(color: Int) {
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        ambient.background = android.graphics.drawable.GradientDrawable().apply {
+            gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+            gradientRadius = w * 0.75f
+            setGradientCenter(0.75f, 0.15f)
+            colors = intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(color, 0xCC), 0xFF0B1220.toInt())
         }
     }
 

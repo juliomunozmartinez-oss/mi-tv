@@ -21,6 +21,8 @@ data class Card(
     val resume: Resume? = null,
     /** Tarjeta «Ver todo» al final de una fila. */
     val more: Boolean = false,
+    /** Posición en el Top 10 (1–10); 0 = tarjeta normal. */
+    val rank: Int = 0,
 )
 
 /**
@@ -87,19 +89,34 @@ class CardAdapter(
         val title: TextView? = view.findViewById(R.id.title)
         val subtitle: TextView? = view.findViewById(R.id.subtitle)
         val badge: View = view.findViewById(R.id.listBadge)
+        val rank: TextView? = view.findViewById(R.id.rank)
     }
 
-    override fun getItemViewType(position: Int) = if (row.wide) TYPE_WIDE else TYPE_POSTER
+    override fun getItemViewType(position: Int) = when {
+        row.cards[position].rank > 0 -> TYPE_RANK
+        row.wide -> TYPE_WIDE
+        else -> TYPE_POSTER
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val layout = if (viewType == TYPE_WIDE) R.layout.item_card_wide else R.layout.item_card_poster
+        val layout = when (viewType) {
+            TYPE_WIDE -> R.layout.item_card_wide
+            TYPE_RANK -> R.layout.item_card_rank
+            else -> R.layout.item_card_poster
+        }
         val vh = VH(LayoutInflater.from(parent.context).inflate(layout, parent, false))
         Ui.rounded(vh.focusTarget)
         val scale = if (viewType == TYPE_WIDE) 1.06f else 1.1f
+        val wide = viewType == TYPE_WIDE
+        // Los pósters no enfocados se ven un poco atenuados; el enfocado crece, brilla y muestra su título.
+        if (!wide) vh.focusTarget.alpha = DIM
         vh.focusTarget.setOnFocusChangeListener { v, has ->
             val sc = if (has) scale else 1f
-            v.animate().scaleX(sc).scaleY(sc).setDuration(140).start()
-            v.translationZ = if (has) 8f else 0f
+            v.animate().scaleX(sc).scaleY(sc).alpha(if (has || wide) 1f else DIM).setDuration(160).start()
+            v.translationZ = if (has) 16f else 0f
+            v.elevation = if (has) 12f else 0f
+            if (!wide) vh.title?.visibility = if (has) View.VISIBLE else View.INVISIBLE
+            vh.rank?.setTextColor(if (has) 0xFFCBD5E1.toInt() else 0xFF334155.toInt())
             val pos = vh.bindingAdapterPosition
             if (has && pos != RecyclerView.NO_POSITION) onFocus?.invoke(row, pos)
         }
@@ -136,6 +153,7 @@ class CardAdapter(
         }
         holder.fallback.text = card.title
         holder.title?.text = card.title
+        holder.rank?.text = card.rank.toString()
         holder.subtitle?.text = card.subtitle ?: ""
         holder.subtitle?.visibility = if (card.subtitle.isNullOrBlank()) View.GONE else View.VISIBLE
 
@@ -164,6 +182,8 @@ class CardAdapter(
     companion object {
         const val TYPE_POSTER = 1
         const val TYPE_WIDE = 2
+        const val TYPE_RANK = 3
+        private const val DIM = 0.82f
     }
 }
 
@@ -177,6 +197,7 @@ class RowsAdapter(
     private val pool = RecyclerView.RecycledViewPool().apply {
         setMaxRecycledViews(CardAdapter.TYPE_POSTER, 40)
         setMaxRecycledViews(CardAdapter.TYPE_WIDE, 30)
+        setMaxRecycledViews(CardAdapter.TYPE_RANK, 12)
     }
 
     var rows: List<Row> = emptyList()

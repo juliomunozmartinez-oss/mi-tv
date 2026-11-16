@@ -76,6 +76,18 @@ class PlayerActivity : AppCompatActivity() {
     private var countdown = 0
     private var centerLongPressed = false
     private var recorded = false
+    private lateinit var episodePanel: View
+    private lateinit var panelSeasons: androidx.recyclerview.widget.RecyclerView
+    private lateinit var panelEpisodes: androidx.recyclerview.widget.RecyclerView
+    private lateinit var btnSkipIntro: View
+    private var panelSeason = -1
+    private var introSkipped = false
+    private val introCheck = object : Runnable {
+        override fun run() {
+            updateSkipIntro()
+            handler.postDelayed(this, 1000)
+        }
+    }
     /** Programa grabado de la guía (catch-up): se reproduce como película. */
     private var catchupUrl: String? = null
     private var sleepWarned = false
@@ -145,6 +157,14 @@ class PlayerActivity : AppCompatActivity() {
         nextTitle = findViewById(R.id.nextTitle)
         nextCountdown = findViewById(R.id.nextCountdown)
         findViewById<View>(R.id.btnNextNow).setOnClickListener { playNextNow() }
+        episodePanel = findViewById(R.id.episodePanel)
+        panelSeasons = findViewById(R.id.panelSeasons)
+        panelEpisodes = findViewById(R.id.panelEpisodes)
+        btnSkipIntro = findViewById(R.id.btnSkipIntro)
+        btnSkipIntro.setOnClickListener { skipIntro() }
+        panelSeasons.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
+        panelEpisodes.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
+        panelEpisodes.itemAnimator = null
         findViewById<View>(R.id.btnNextCancel).setOnClickListener { finish() }
 
         startMs = savedInstanceState?.getLong(Nav.EXTRA_START) ?: intent.getLongExtra(Nav.EXTRA_START, 0L)
@@ -487,6 +507,9 @@ class PlayerActivity : AppCompatActivity() {
             store.recordView(Resume.seriesKey(sid), Category.keyOf(Kind.SERIES, cat), series?.name ?: "")
         }
         play(client.episodeUrl(ep.id, ep.ext), hls = false, positionMs = positionMs)
+        introSkipped = positionMs > 180_000
+        handler.removeCallbacks(introCheck)
+        handler.postDelayed(introCheck, 1000)
         handler.removeCallbacks(saver)
         handler.postDelayed(saver, SAVE_EVERY_MS)
     }
@@ -526,6 +549,98 @@ class PlayerActivity : AppCompatActivity() {
         playerView.requestFocus()
     }
 
+    // ---------- Episodios mientras se ve y «Saltar intro» ----------
+
+    private fun showEpisodes(): Boolean {
+        val d = series ?: return false
+        val ep = episode ?: return false
+        if (d.seasons.isEmpty()) return false
+        playerView.hideController()
+        playerView.useController = false
+        btnSkipIntro.visibility = View.GONE
+        episodePanel.visibility = View.VISIBLE
+        val seasons = d.seasons.keys.sorted()
+        panelSeasons.adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(
+                parent: android.view.ViewGroup, viewType: Int,
+            ): androidx.recyclerview.widget.RecyclerView.ViewHolder =
+                object : androidx.recyclerview.widget.RecyclerView.ViewHolder(
+                    layoutInflater.inflate(R.layout.item_season, parent, false)
+                ) {}
+
+            override fun onBindViewHolder(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, position: Int) {
+                val sNum = seasons[position]
+                (holder.itemView as TextView).apply {
+                    text = "Temporada $sNum"
+                    isSelected = sNum == panelSeason
+                    setOnClickListener { fillPanel(sNum, focus = true) }
+                }
+            }
+
+            override fun getItemCount() = seasons.size
+        }
+        fillPanel(ep.season, focus = true)
+        return true
+    }
+
+    private fun fillPanel(seasonNum: Int, focus: Boolean) {
+        val d = series ?: return
+        val current = episode
+        panelSeason = seasonNum
+        panelSeasons.adapter?.notifyDataSetChanged()
+        val watched = store.watched().toHashSet()
+        val eps = d.seasons[seasonNum].orEmpty()
+        val cards = eps.map { e ->
+            Card(
+                kind = Kind.SERIES, id = e.id, title = "${e.num}. ${e.title}",
+                subtitle = listOfNotNull(
+                    when {
+                        e.id == current?.id -> "▶ Viendo"
+                        e.id in watched -> "✓ Visto"
+                        else -> null
+                    },
+                    Ui.duration(e.durationSecs),
+                ).joinToString("  ·  ").ifBlank { null },
+                image = e.image ?: d.backdrop ?: d.poster,
+            )
+        }
+        panelEpisodes.adapter = CardAdapter(Row("Temporada $seasonNum", cards, wide = true), onClick = { _, i ->
+            val chosen = eps[i]
+            hideEpisodes()
+            if (chosen.id != current?.id) {
+                saveProgress(ended = false)
+                startMs = 0L
+                startEpisode(chosen, 0L)
+            }
+        })
+        val idx = eps.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
+        panelEpisodes.scrollToPosition(idx)
+        if (focus) panelEpisodes.post {
+            panelEpisodes.layoutManager?.findViewByPosition(idx)?.let { (it.findViewById<View>(R.id.frame) ?: it).requestFocus() }
+        }
+    }
+
+    private fun hideEpisodes() {
+        episodePanel.visibility = View.GONE
+        playerView.useController = true
+        playerView.requestFocus()
+    }
+
+    /** Muestra «Saltar intro» en los primeros 3 minutos de cada episodio. */
+    private fun updateSkipIntro() {
+        val p = player ?: return
+        val show = kind == Kind.SERIES && !introSkipped && episodePanel.visibility != View.VISIBLE &&
+            p.currentPosition in 5_000L..180_000L && p.isPlaying
+        btnSkipIntro.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun skipIntro() {
+        val p = player ?: return
+        introSkipped = true
+        btnSkipIntro.visibility = View.GONE
+        p.seekTo(p.currentPosition + 85_000L)
+    }
+
     // ---------- Seguir viendo ----------
 
     /**
@@ -561,6 +676,7 @@ class PlayerActivity : AppCompatActivity() {
         val ep = episode ?: return
         val sid = seriesId ?: return
         val key = Resume.seriesKey(sid)
+        if (finished) store.markWatched(ep.id)
         if (finished) {
             val next = d.next(ep)
             if (next == null) {
@@ -587,6 +703,27 @@ class PlayerActivity : AppCompatActivity() {
     // ---------- Control remoto ----------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (kind == Kind.SERIES && catchupUrl == null && nextPanel.visibility != View.VISIBLE) {
+            val down = event.action == KeyEvent.ACTION_DOWN
+            if (episodePanel.visibility == View.VISIBLE) {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (down) hideEpisodes()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+            val controllerShown = playerView.isControllerFullyVisible
+            // ▼ con los controles ocultos: abrir los episodios sin salir.
+            if (down && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !controllerShown) {
+                if (showEpisodes()) return true
+            }
+            // OK mientras se ve «Saltar intro» (y los controles están ocultos): saltar.
+            val center = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
+            if (center && btnSkipIntro.visibility == View.VISIBLE && !controllerShown) {
+                if (down) skipIntro()
+                return true
+            }
+        }
         if (kind != Kind.LIVE || catchupUrl != null || nextPanel.visibility == View.VISIBLE) {
             return super.dispatchKeyEvent(event)
         }

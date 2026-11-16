@@ -103,6 +103,35 @@
             android:layout_weight="1" />
 
         <LinearLayout
+            android:id="@+id/similarBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="12dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="56dp"
+                android:text="Títulos similares"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/similar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:paddingStart="48dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="48dp"
+                android:paddingBottom="6dp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/seriesBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -14,7 +14,7 @@ android {
         // El número de compilación de GitHub sirve para saber si hay una versión más nueva.
         val build = (System.getenv("BUILD_NUMBER") ?: "13").toInt()
         versionCode = build
-        versionName = "4.3 (build $build)"
+        versionName = "5.0 (build $build)"
         buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 
@@ -62,4 +62,5 @@ dependencies {
     // Decodificador de audio FFmpeg (AC3, E-AC3, DTS, TrueHD…) para películas y series.
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:$media3+2")
     implementation("io.coil-kt:coil:2.7.0")
+    implementation("androidx.palette:palette-ktx:1.0.0")
 }

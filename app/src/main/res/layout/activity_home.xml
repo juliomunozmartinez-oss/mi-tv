@@ -4,6 +4,12 @@
     android:layout_height="match_parent"
     android:background="@color/bg">
 
+    <!-- Fondo que toma el color del póster enfocado -->
+    <View
+        android:id="@+id/ambient"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <!-- Zona de avance: imagen grande + información del título enfocado -->
     <FrameLayout
         android:id="@+id/previewArea"
@@ -203,25 +209,45 @@
         android:textSize="20sp"
         android:visibility="gone" />
 
-    <LinearLayout
+    <!-- Carga con «esqueleto»: siluetas de lo que viene -->
+    <FrameLayout
         android:id="@+id/loading"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:visibility="gone">
 
-        <ProgressBar
-            android:layout_width="56dp"
-            android:layout_height="56dp" />
+        <View android:layout_width="120dp" android:layout_height="14dp" android:layout_marginStart="56dp" android:layout_marginTop="110dp" android:background="@drawable/skel" />
+        <View android:layout_width="420dp" android:layout_height="44dp" android:layout_marginStart="56dp" android:layout_marginTop="138dp" android:background="@drawable/skel" />
+        <View android:layout_width="520dp" android:layout_height="14dp" android:layout_marginStart="56dp" android:layout_marginTop="200dp" android:background="@drawable/skel" />
+        <View android:layout_width="460dp" android:layout_height="14dp" android:layout_marginStart="56dp" android:layout_marginTop="224dp" android:background="@drawable/skel" />
+        <View android:layout_width="220dp" android:layout_height="20dp" android:layout_marginStart="56dp" android:layout_marginTop="330dp" android:background="@drawable/skel" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="56dp" android:layout_marginTop="364dp" android:orientation="horizontal">
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+        </LinearLayout>
+        <View android:layout_width="220dp" android:layout_height="20dp" android:layout_marginStart="56dp" android:layout_marginTop="540dp" android:background="@drawable/skel" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="56dp" android:layout_marginTop="574dp" android:orientation="horizontal">
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+            <View android:layout_width="116dp" android:layout_height="174dp" android:layout_marginEnd="16dp" android:background="@drawable/skel" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="20dp"
             android:text="Cargando tu catálogo…"
             android:textColor="@color/text_dim"
-            android:textSize="18sp" />
-    </LinearLayout>
+            android:textSize="15sp" />
+    </FrameLayout>
 </FrameLayout>

@@ -117,6 +117,25 @@ class DetailActivity : AppCompatActivity() {
         }
     }
 
+    /** «Títulos similares»: otras películas de la misma categoría, lo más nuevo primero. */
+    private fun showSimilar(movie: Movie) {
+        val similar = Catalog.movies.asSequence()
+            .filter { it.categoryId == movie.categoryId && it.id != movie.id }
+            .sortedByDescending { it.added }
+            .take(16)
+            .map { Card(Kind.MOVIE, it.id, it.name, image = it.poster) }
+            .toList()
+        if (similar.size < 3) return
+        findViewById<View>(R.id.similarBox).visibility = View.VISIBLE
+        val list = findViewById<RecyclerView>(R.id.similar)
+        list.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        list.adapter = CardAdapter(
+            Row("Títulos similares", similar, wide = false),
+            onClick = { r, i -> Nav.detail(this, profile, Kind.MOVIE, r.cards[i].id) },
+            store = store,
+        )
+    }
+
     private fun updateListButton() {
         btnList.text = if (store.inList(listKey)) "✓  En mi lista" else "+  Mi lista"
     }
@@ -137,6 +156,7 @@ class DetailActivity : AppCompatActivity() {
         }
         btnRestart.setOnClickListener { Nav.playMovie(this, profile, id, 0L) }
 
+        showSimilar(movie)
         loading.visibility = View.VISIBLE
         lifecycleScope.launch {
             runCatching { Catalog.movieDetail(prefs.client(), movie) }
@@ -215,6 +235,7 @@ class DetailActivity : AppCompatActivity() {
         season = s
         (seasonsList.adapter as? SeasonAdapter)?.notifyDataSetChanged()
         val r = store.get(resumeKey)
+        val watched = store.watched().toHashSet()
         val eps = d.seasons[s].orEmpty()
         val cards = eps.map { ep ->
             val resumeHere = r?.episodeId == ep.id
@@ -222,7 +243,14 @@ class DetailActivity : AppCompatActivity() {
                 kind = Kind.SERIES,
                 id = ep.id,
                 title = "${ep.num}. ${ep.title}",
-                subtitle = Ui.duration(ep.durationSecs),
+                subtitle = listOfNotNull(
+                    when {
+                        resumeHere -> "▶ Viendo"
+                        ep.id in watched -> "✓ Visto"
+                        else -> null
+                    },
+                    Ui.duration(ep.durationSecs),
+                ).joinToString("  ·  ").ifBlank { null },
                 image = ep.image ?: d.backdrop ?: d.poster,
                 progress = if (resumeHere) r?.progress ?: -1f else -1f,
             )

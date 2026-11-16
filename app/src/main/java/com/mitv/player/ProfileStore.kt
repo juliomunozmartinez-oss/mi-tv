@@ -149,4 +149,12 @@ class ProfileStore(context: Context, profileId: String) {
     var subtitleLanguage: String?
         get() = if (sp.contains("sub_lang")) sp.getString("sub_lang", "") else null
         set(v) = sp.edit().putString("sub_lang", v ?: "").apply()
+
+    // ---- Episodios ya vistos (para marcarlos con ✓) ----
+    fun markWatched(episodeId: String) {
+        val list = (listOf(episodeId) + watched().filter { it != episodeId }).take(2000)
+        sp.edit().putString("watched_eps", list.joinToString("\n")).apply()
+    }
+
+    fun watched(): List<String> = (sp.getString("watched_eps", "") ?: "").split('\n').filter { it.isNotBlank() }
 }
