@@ -8,34 +8,56 @@ sub fetchData()
     relaxed = (Store_Get("tls_relaxed", "0") = "1")
     attempts = []
     usedHttp = false
+    usedHttps = false
     usedRelaxed = relaxed
-    r = HttpGet(req.url, relaxed)
-    attempts.Push("https " + ToStr(r.code) + " " + ToStr(r.reason))
-    isHttps = LCase(Left(req.url, 8)) = "https://"
-    ' 1) Si https falla y no fue por el servidor (código negativo = certificado/conexión),
-    '    reintentar sin revisar el certificado (el Roku es más estricto que Android).
-    if r.body = invalid and isHttps and not relaxed and r.code < 0 then
-        r2 = HttpGet(req.url, true)
-        attempts.Push("https sin verificar " + ToStr(r2.code) + " " + ToStr(r2.reason))
-        if r2.body <> invalid then
-            r = r2
-            usedRelaxed = true
+    url = req.url
+    isHttps = LCase(Left(url, 8)) = "https://"
+    isHttp = LCase(Left(url, 7)) = "http://"
+    r = HttpGet(url, relaxed)
+    attempts.Push(SchemeLabel(url, relaxed) + " " + ToStr(r.code) + " " + ToStr(r.reason))
+    if isHttps then
+        ' Certificado rechazado (código negativo): reintentar sin revisarlo.
+        if r.body = invalid and not relaxed and r.code < 0 then
+            r2 = HttpGet(url, true)
+            attempts.Push("https sin verificar " + ToStr(r2.code) + " " + ToStr(r2.reason))
+            if r2.body <> invalid then
+                r = r2
+                usedRelaxed = true
+            end if
         end if
-    end if
-    ' 2) Último intento: http.
-    if r.body = invalid and isHttps then
-        r3 = HttpGet("http://" + Mid(req.url, 9), false)
-        attempts.Push("http " + ToStr(r3.code) + " " + ToStr(r3.reason))
-        if r3.body <> invalid then
-            r = r3
-            usedHttp = true
+        ' Último intento: http.
+        if r.body = invalid then
+            r3 = HttpGet("http://" + Mid(url, 9), false)
+            attempts.Push("http " + ToStr(r3.code) + " " + ToStr(r3.reason))
+            if r3.body <> invalid then
+                r = r3
+                usedHttp = true
+            end if
+        end if
+    else if isHttp and r.body = invalid then
+        ' El servidor está guardado con http:// pero el puerto es de https
+        ' (responde «400 Bad request»): probar con https, normal y sin revisar certificado.
+        su = "https://" + Mid(url, 8)
+        r4 = HttpGet(su, false)
+        attempts.Push("https " + ToStr(r4.code) + " " + ToStr(r4.reason))
+        if r4.body = invalid and r4.code < 0 then
+            r5 = HttpGet(su, true)
+            attempts.Push("https sin verificar " + ToStr(r5.code) + " " + ToStr(r5.reason))
+            if r5.body <> invalid then
+                r4 = r5
+                usedRelaxed = true
+            end if
+        end if
+        if r4.body <> invalid then
+            r = r4
+            usedHttps = true
         end if
     end if
     data = invalid
     if r.body <> invalid and r.body <> "" then data = ParseJson(r.body)
     res = {
         id: req.id, kind: req.kind, ok: data <> invalid, code: r.code, reason: r.reason,
-        usedHttp: usedHttp, usedRelaxed: usedRelaxed, attempts: attempts.Join(" | ")
+        usedHttp: usedHttp, usedHttps: usedHttps, usedRelaxed: usedRelaxed, attempts: attempts.Join(" | ")
     }
     if req.kind = "items" then
         res.content = BuildItems(data, req.itemKind)
@@ -44,6 +66,14 @@ sub fetchData()
     end if
     m.top.response = res
 end sub
+
+function SchemeLabel(url as string, relaxed as boolean) as string
+    if LCase(Left(url, 8)) = "https://" then
+        if relaxed then return "https sin verificar"
+        return "https"
+    end if
+    return "http"
+end function
 
 ' Regresa { body (o invalid), code, reason } para poder explicar los errores.
 ' relaxed = no revisar el certificado del servidor (la conexión sigue cifrada).

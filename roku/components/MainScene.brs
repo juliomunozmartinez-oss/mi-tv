@@ -146,6 +146,11 @@ sub onLoginResult(msg as object)
             server = Store_Get("server", "")
             if LCase(Left(server, 8)) = "https://" then Store_Set("server", "http://" + Mid(server, 9))
         end if
+        ' Si solo funcionó con «s», guardar el servidor con https:// para todo lo demás.
+        if res.usedHttps = true then
+            server = Store_Get("server", "")
+            if LCase(Left(server, 7)) = "http://" then Store_Set("server", "https://" + Mid(server, 8))
+        end if
         if res.usedRelaxed = true then Store_Set("tls_relaxed", "1")
         message("✔ Conectado", "La cuenta funciona. Elige un perfil.")
     else if res.data <> invalid then
