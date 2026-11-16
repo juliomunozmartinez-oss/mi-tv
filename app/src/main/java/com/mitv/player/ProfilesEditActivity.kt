@@ -58,7 +58,7 @@ class ProfilesEditActivity : AppCompatActivity() {
                 }
             }
             val name = TextView(this).apply {
-                text = p.name + if (p.kids) "  ·  Infantil" else "  ·  Adulto"
+                text = p.name + "  ·  " + p.levelLabel
                 textSize = 20f
                 setTextColor(getColor(R.color.text))
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -81,8 +81,14 @@ class ProfilesEditActivity : AppCompatActivity() {
                     val next = Profiles.palette[(Profiles.palette.indexOf(p.color) + 1) % Profiles.palette.size]
                     save(all.toMutableList().also { it[i] = p.copy(color = next) }, i, 2)
                 },
-                button(if (p.kids) "Hacer adulto" else "Hacer infantil") {
-                    save(all.toMutableList().also { it[i] = p.copy(kids = !p.kids) }, i, 3)
+                // Adulto → Adolescente → Infantil → Adulto
+                button("Nivel: " + p.levelLabel) {
+                    val next = when {
+                        !p.kids && !p.teen -> p.copy(teen = true, kids = false)
+                        p.teen -> p.copy(teen = false, kids = true)
+                        else -> p.copy(teen = false, kids = false)
+                    }
+                    save(all.toMutableList().also { it[i] = next }, i, 3)
                 },
                 button("Borrar") { delete(i) },
             )

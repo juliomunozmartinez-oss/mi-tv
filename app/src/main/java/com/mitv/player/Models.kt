@@ -100,7 +100,16 @@ data class Profile(
     val color: Int,
     /** Avatar de héroe elegido (nombre, p. ej. "rayo"); null = solo la inicial sobre su color. */
     val avatar: String? = null,
+    /** Adolescente: ve casi todo menos las categorías bloqueadas (+18, terror…). */
+    val teen: Boolean = false,
 ) {
+    /** Infantil o adolescente: no es adulto (no pide PIN y tiene filtro). */
+    val restricted: Boolean get() = kids || teen
+    val levelLabel: String get() = when {
+        kids -> "Infantil"
+        teen -> "Adolescente"
+        else -> "Adulto"
+    }
     val initial: String get() = name.trim().take(1).uppercase().ifBlank { "?" }
 }
 

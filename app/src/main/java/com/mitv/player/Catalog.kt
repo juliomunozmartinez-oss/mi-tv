@@ -160,6 +160,10 @@ object Catalog {
         }
         loadedKey = d.key
 
+        if (!prefs.teenInitialized) {
+            prefs.teenBlocked = autoTeenBlocked()
+            prefs.teenInitialized = true
+        }
         if (!prefs.kidsInitialized) {
             prefs.kidsCategories = autoKidsCategories()
             prefs.kidsInitialized = true
@@ -184,6 +188,16 @@ object Catalog {
 
     fun isMexico(name: String) = mexicoRegex.containsMatchIn(name)
     fun isKids(name: String) = kidsRegex.containsMatchIn(name)
+
+    private val teenBlockRegex = Regex(
+        """\+\s*18|18\s*\+|adult|xxx|er[oó]tic|porn|sexy|hot\b|playboy|venus|terror|horror|miedo|gore|slasher""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun isTeenBlocked(name: String) = teenBlockRegex.containsMatchIn(name)
+
+    fun autoTeenBlocked(): Set<String> =
+        (liveCats + vodCats + seriesCats).filter { isTeenBlocked(it.name) }.map { it.key }.toSet()
 
     /** Ordena según lo que eligió el usuario; lo que no eligió conserva el orden del proveedor al final. */
     fun applyOrder(base: List<Category>, order: List<String>): List<Category> {
@@ -222,9 +236,10 @@ object Genres {
 /** Lo que puede ver un perfil: los infantiles solo ven las categorías permitidas. */
 class CatalogView(prefs: Prefs, val profile: Profile) {
     private val allowed: Set<String>? = if (profile.kids) prefs.kidsCategories else null
+    private val blocked: Set<String> = if (profile.teen && !profile.kids) prefs.teenBlocked else emptySet()
     private val hidden: Set<String> = if (profile.kids) emptySet() else prefs.hiddenCategories
 
-    private fun ok(c: Category) = (allowed == null || c.key in allowed) && c.key !in hidden
+    private fun ok(c: Category) = (allowed == null || c.key in allowed) && c.key !in hidden && c.key !in blocked
 
     val liveCats = Catalog.ordered(Kind.LIVE, prefs).filter(::ok)
     val vodCats = Catalog.ordered(Kind.MOVIE, prefs).filter(::ok)
@@ -251,7 +266,7 @@ class CatalogView(prefs: Prefs, val profile: Profile) {
     fun seriesIn(catId: String) = seriesByCat[catId].orEmpty()
 
     fun canSee(key: String): Boolean {
-        if (allowed == null) return true
+        if (allowed == null && blocked.isEmpty()) return true
         val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
         return when (type) {
             "movie" -> Catalog.movieById[id]?.categoryId in vodIds

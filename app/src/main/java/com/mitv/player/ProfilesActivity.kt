@@ -39,7 +39,10 @@ class ProfilesActivity : AppCompatActivity() {
             val name = item.findViewById<TextView>(R.id.name)
             Avatars.bind(avatar, item.findViewById(R.id.initial), item.findViewById(R.id.avatarImage), profile)
             name.text = profile.name
-            item.findViewById<View>(R.id.badge).visibility = if (profile.kids) View.VISIBLE else View.INVISIBLE
+            item.findViewById<TextView>(R.id.badge).apply {
+                text = profile.levelLabel
+                visibility = if (profile.restricted) View.VISIBLE else View.INVISIBLE
+            }
             avatar.setOnFocusChangeListener { v, has ->
                 val s = if (has) 1.12f else 1f
                 v.animate().scaleX(s).scaleY(s).setDuration(140).start()
@@ -75,6 +78,6 @@ class ProfilesActivity : AppCompatActivity() {
     }
 
     private fun enter(profile: Profile) {
-        if (profile.kids) Nav.home(this, profile) else Ui.askPin(this, prefs) { Nav.home(this, profile) }
+        if (profile.restricted) Nav.home(this, profile) else Ui.askPin(this, prefs) { Nav.home(this, profile) }
     }
 }

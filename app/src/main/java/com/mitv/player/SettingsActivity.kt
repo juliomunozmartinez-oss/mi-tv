@@ -129,6 +129,15 @@ class SettingsActivity : AppCompatActivity() {
                 startActivity(android.content.Intent(this, KidsActivity::class.java))
             }
         }
+        findViewById<TextView>(R.id.btnTeen).setOnClickListener {
+            if (!prefs.isConfigured) {
+                show("Primero guarda tu servidor, usuario y contraseña.", ok = false)
+            } else {
+                startActivity(
+                    android.content.Intent(this, KidsActivity::class.java).putExtra(KidsActivity.EXTRA_TEEN, true)
+                )
+            }
+        }
         btnPin.setOnClickListener {
             if (prefs.pinEnabled) {
                 prefs.pinEnabled = false

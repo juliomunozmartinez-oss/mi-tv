@@ -48,6 +48,21 @@ class Prefs(context: Context) {
         get() = sp.getStringSet("kids_categories", emptySet())?.toSet() ?: emptySet()
         set(v) = sp.edit().putStringSet("kids_categories", v).apply()
 
+    // ---- Categorías bloqueadas para adolescentes ----
+    var teenInitialized: Boolean
+        get() = sp.getBoolean("teen_initialized", false)
+        set(v) = sp.edit().putBoolean("teen_initialized", v).apply()
+
+    var teenBlocked: Set<String>
+        get() = sp.getStringSet("teen_blocked", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("teen_blocked", v).apply()
+
+    fun toggleTeenBlocked(key: String) {
+        val s = teenBlocked.toMutableSet()
+        if (!s.add(key)) s.remove(key)
+        teenBlocked = s
+    }
+
     fun toggleKidsCategory(key: String): Boolean {
         val s = kidsCategories.toMutableSet()
         val added = s.add(key)

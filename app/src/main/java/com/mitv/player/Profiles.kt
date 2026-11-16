@@ -17,7 +17,7 @@ object Profiles {
         Profile("jenny", "Jenny", kids = false, color = palette[0]),
         Profile("julio", "Julio", kids = false, color = palette[1]),
         Profile("cam", "Cam", kids = true, color = palette[2]),
-        Profile("maju", "Maju", kids = true, color = palette[3]),
+        Profile("maju", "Maju", kids = false, color = palette[3], teen = true),
     )
 
     private fun sp(ctx: Context) = ctx.applicationContext.getSharedPreferences("mitv", Context.MODE_PRIVATE)
@@ -31,6 +31,7 @@ object Profiles {
                 Profile(
                     o.getString("id"), o.getString("name"), o.optBoolean("kids"), o.optInt("color", palette[0]),
                     o.optString("avatar").ifBlank { null },
+                    o.optBoolean("teen"),
                 )
             }
         }.getOrNull()?.takeIf { it.isNotEmpty() } ?: defaults
@@ -41,7 +42,7 @@ object Profiles {
         list.forEach {
             arr.put(
                 JSONObject().put("id", it.id).put("name", it.name).put("kids", it.kids).put("color", it.color)
-                    .put("avatar", it.avatar ?: "")
+                    .put("avatar", it.avatar ?: "").put("teen", it.teen)
             )
         }
         sp(ctx).edit().putString("profiles", arr.toString()).apply()

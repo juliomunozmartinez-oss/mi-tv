@@ -11,8 +11,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.launch
 
-/** Elegir qué categorías ven los perfiles infantiles. */
+/**
+ * Elegir qué categorías ven los perfiles infantiles, o (con EXTRA_TEEN)
+ * cuáles se bloquean para los adolescentes.
+ */
 class KidsActivity : AppCompatActivity() {
+
+    companion object {
+        const val EXTRA_TEEN = "teen"
+    }
+
+    private var teen = false
+    private fun current() = if (teen) prefs.teenBlocked else prefs.kidsCategories
 
     private sealed class Item {
         data class Header(val text: String) : Item()
@@ -28,13 +38,20 @@ class KidsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_kids)
         prefs = Prefs(this)
+        teen = intent.getBooleanExtra(EXTRA_TEEN, false)
+        if (teen) {
+            findViewById<TextView>(R.id.title).text = "Bloqueadas para adolescentes"
+            findViewById<TextView>(R.id.subtitle).text =
+                "Lo marcado NO lo ven los perfiles adolescentes. Todo lo demás sí. OK para marcar o desmarcar."
+        }
         list = findViewById(R.id.list)
         list.layoutManager = LinearLayoutManager(this)
         list.itemAnimator = null
 
         findViewById<TextView>(R.id.btnAuto).setOnClickListener {
-            prefs.kidsCategories = Catalog.autoKidsCategories()
-            selected = prefs.kidsCategories
+            if (teen) prefs.teenBlocked = Catalog.autoTeenBlocked()
+            else prefs.kidsCategories = Catalog.autoKidsCategories()
+            selected = current()
             list.adapter?.notifyDataSetChanged()
             Toast.makeText(this, "Se marcaron ${selected.size} categorías", Toast.LENGTH_SHORT).show()
         }
@@ -51,7 +68,7 @@ class KidsActivity : AppCompatActivity() {
     }
 
     private fun build() {
-        selected = prefs.kidsCategories
+        selected = current()
         val out = mutableListOf<Item>()
         fun section(title: String, cats: List<Category>) {
             if (cats.isEmpty()) return
@@ -85,8 +102,9 @@ class KidsActivity : AppCompatActivity() {
                     tv.text = (if (on) "☑  " else "☐  ") + item.category.name
                     tv.alpha = if (on) 1f else 0.7f
                     tv.setOnClickListener {
-                        prefs.toggleKidsCategory(item.category.key)
-                        selected = prefs.kidsCategories
+                        if (teen) prefs.toggleTeenBlocked(item.category.key)
+                        else prefs.toggleKidsCategory(item.category.key)
+                        selected = current()
                         notifyItemChanged(holder.bindingAdapterPosition)
                     }
                 }

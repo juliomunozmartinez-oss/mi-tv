@@ -14,7 +14,8 @@ object SearchIndex {
     /** Cambia si cambia el catálogo o lo que puede ver el perfil. */
     private fun keyFor(prefs: Prefs, profile: Profile) = listOf(
         Catalog.loadedKey, Catalog.live.size, Catalog.movies.size, Catalog.series.size,
-        profile.kids, prefs.kidsCategories.hashCode(), prefs.hiddenCategories.hashCode(),
+        profile.kids, profile.teen, prefs.kidsCategories.hashCode(), prefs.teenBlocked.hashCode(),
+        prefs.hiddenCategories.hashCode(),
     ).joinToString("|")
 
     /** Regresa el índice del perfil, armándolo si hace falta. Llamar fuera del hilo de pantalla. */
