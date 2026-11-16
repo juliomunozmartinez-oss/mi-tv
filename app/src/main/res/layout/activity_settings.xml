@@ -141,6 +141,12 @@
             android:text="Buscar actualizaciones de MuGa TV" />
 
         <TextView
+            android:id="@+id/btnVolumeMode"
+            style="@style/Btn"
+            android:layout_marginTop="12dp"
+            android:text="Volumen: lo controla la tele" />
+
+        <TextView
             android:id="@+id/btnDeadChannels"
             style="@style/Btn"
             android:layout_marginTop="12dp"

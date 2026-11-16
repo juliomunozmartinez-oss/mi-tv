@@ -88,6 +88,21 @@ class SettingsActivity : AppCompatActivity() {
             text = "Buscar actualizaciones  ·  tienes la build ${BuildConfig.BUILD_NUMBER}"
             setOnClickListener { Updater.checkNow(this@SettingsActivity, lifecycleScope) }
         }
+        val btnVolume = findViewById<TextView>(R.id.btnVolumeMode)
+        fun volumeLabel() {
+            btnVolume.text = if (prefs.appVolumeMode) "Volumen: lo controla MuGa TV (+ / − del control)"
+            else "Volumen: lo controla la tele"
+        }
+        volumeLabel()
+        btnVolume.setOnClickListener {
+            prefs.appVolumeMode = !prefs.appVolumeMode
+            volumeLabel()
+            show(
+                if (prefs.appVolumeMode) "Listo: en esta tele, + / − cambian el volumen dentro de MuGa TV (hasta 150 %)."
+                else "Listo: el volumen lo vuelve a controlar la tele.",
+                ok = true,
+            )
+        }
         findViewById<TextView>(R.id.btnDeadChannels).setOnClickListener {
             DeadChannels.clear(this)
             show("Listo: los canales sin señal vuelven a su lugar.", ok = true)

@@ -84,4 +84,15 @@ class Prefs(context: Context) {
     var subtitleSize: Int
         get() = sp.getInt("sub_size", 1)
         set(v) = sp.edit().putInt("sub_size", v).apply()
+
+    // ---- Volumen propio de la app (para teles cuyo volumen no responde) ----
+    /** true = los botones + / − del control cambian el volumen dentro de MuGa TV. */
+    var appVolumeMode: Boolean
+        get() = sp.getBoolean("app_volume", false)
+        set(v) = sp.edit().putBoolean("app_volume", v).apply()
+
+    /** Nivel 0–150 (más de 100 amplifica). */
+    var appVolume: Int
+        get() = sp.getInt("app_volume_level", 100)
+        set(v) = sp.edit().putInt("app_volume_level", v.coerceIn(0, 150)).apply()
 }

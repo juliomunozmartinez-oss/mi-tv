@@ -76,6 +76,8 @@ class PlayerActivity : AppCompatActivity() {
     private var countdown = 0
     private var centerLongPressed = false
     private var recorded = false
+    private var enhancer: android.media.audiofx.LoudnessEnhancer? = null
+    private val hideVolume = Runnable { findViewById<View>(R.id.volumeBox).visibility = View.GONE }
     private lateinit var channelPanel: View
     private lateinit var panelChannels: androidx.recyclerview.widget.RecyclerView
     /** Canal que se estaba viendo al abrir la lista (para regresar con Atrás). */
@@ -277,6 +279,8 @@ class PlayerActivity : AppCompatActivity() {
             startMs = player?.currentPosition ?: startMs
         }
         handler.removeCallbacksAndMessages(null)
+        runCatching { enhancer?.release() }
+        enhancer = null
         player?.release()
         player = null
     }
@@ -360,6 +364,7 @@ class PlayerActivity : AppCompatActivity() {
         playerView.player = p
         playerView.requestFocus()
         player = p
+        applyVolume()
     }
 
     private fun play(url: String, hls: Boolean, positionMs: Long) {
@@ -737,6 +742,34 @@ class PlayerActivity : AppCompatActivity() {
         p.seekTo(p.currentPosition + 85_000L)
     }
 
+    // ---------- Volumen de la app ----------
+
+    /** 0–100 % baja el sonido del reproductor; de 100 a 150 % lo amplifica. */
+    private fun applyVolume() {
+        val p = player ?: return
+        val level = if (prefs.appVolumeMode) prefs.appVolume else 100
+        p.volume = (minOf(level, 100) / 100f)
+        val boost = (level - 100).coerceAtLeast(0)
+        runCatching {
+            if (boost > 0) {
+                val e = enhancer ?: android.media.audiofx.LoudnessEnhancer(p.audioSessionId).also { enhancer = it }
+                e.setTargetGain(boost * 24) // hasta +12 dB a 150 %
+                e.enabled = true
+            } else {
+                enhancer?.enabled = false
+            }
+        }
+    }
+
+    private fun showVolume() {
+        val level = prefs.appVolume
+        findViewById<TextView>(R.id.volumeText).text = if (level == 0) "🔇  0 %" else "🔊  $level %"
+        findViewById<ProgressBar>(R.id.volumeBar).progress = level
+        findViewById<View>(R.id.volumeBox).visibility = View.VISIBLE
+        handler.removeCallbacks(hideVolume)
+        handler.postDelayed(hideVolume, 2000)
+    }
+
     // ---------- Seguir viendo ----------
 
     /**
@@ -799,6 +832,21 @@ class PlayerActivity : AppCompatActivity() {
     // ---------- Control remoto ----------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Volumen propio de la app (si se eligió en Ajustes): + / − no van a la tele.
+        if (prefs.appVolumeMode && (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_MUTE)
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                prefs.appVolume = when (event.keyCode) {
+                    KeyEvent.KEYCODE_VOLUME_UP -> prefs.appVolume + 10
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> prefs.appVolume - 10
+                    else -> if (prefs.appVolume > 0) 0 else 100
+                }
+                applyVolume()
+                showVolume()
+            }
+            return true
+        }
         if (kind == Kind.SERIES && catchupUrl == null && nextPanel.visibility != View.VISIBLE) {
             val down = event.action == KeyEvent.ACTION_DOWN
             if (episodePanel.visibility == View.VISIBLE) {
