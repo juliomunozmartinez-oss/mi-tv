@@ -90,7 +90,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         val btnVolume = findViewById<TextView>(R.id.btnVolumeMode)
         fun volumeLabel() {
-            btnVolume.text = if (prefs.appVolumeMode) "Volumen: lo controla MuGa TV (+ / − del control)"
+            btnVolume.text = if (prefs.appVolumeMode) "Volumen: lo controla MuGa TV (▶ o ▲ mientras ves)"
             else "Volumen: lo controla la tele"
         }
         volumeLabel()
@@ -98,7 +98,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.appVolumeMode = !prefs.appVolumeMode
             volumeLabel()
             show(
-                if (prefs.appVolumeMode) "Listo: en esta tele, + / − cambian el volumen dentro de MuGa TV (hasta 150 %)."
+                if (prefs.appVolumeMode) "Listo: en esta tele el volumen lo controla MuGa TV (hasta 150 %). Mientras ves algo: ▶ en TV en vivo o ▲ en películas y series abre la barra; ▲ ▼ suben y bajan."
                 else "Listo: el volumen lo vuelve a controlar la tele.",
                 ok = true,
             )

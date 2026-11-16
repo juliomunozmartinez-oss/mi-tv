@@ -78,6 +78,7 @@ class PlayerActivity : AppCompatActivity() {
     private var recorded = false
     private var enhancer: android.media.audiofx.LoudnessEnhancer? = null
     private val hideVolume = Runnable { findViewById<View>(R.id.volumeBox).visibility = View.GONE }
+    private val volumeOpen get() = findViewById<View>(R.id.volumeBox).visibility == View.VISIBLE
     private lateinit var channelPanel: View
     private lateinit var panelChannels: androidx.recyclerview.widget.RecyclerView
     /** Canal que se estaba viendo al abrir la lista (para regresar con Atrás). */
@@ -90,6 +91,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var btnSkipIntro: View
     private var panelSeason = -1
     private var introSkipped = false
+    private var introShownAt = 0L
     private val introCheck = object : Runnable {
         override fun run() {
             updateSkipIntro()
@@ -608,7 +610,9 @@ class PlayerActivity : AppCompatActivity() {
             store.recordView(Resume.seriesKey(sid), Category.keyOf(Kind.SERIES, cat), series?.name ?: "")
         }
         play(client.episodeUrl(ep.id, ep.ext), hls = false, positionMs = positionMs)
-        introSkipped = positionMs > 180_000
+        // Solo si el episodio empieza desde el principio (no al continuar a la mitad).
+        introSkipped = positionMs > 60_000
+        introShownAt = 0L
         handler.removeCallbacks(introCheck)
         handler.postDelayed(introCheck, 1000)
         handler.removeCallbacks(saver)
@@ -730,8 +734,16 @@ class PlayerActivity : AppCompatActivity() {
     /** Muestra «Saltar intro» en los primeros 3 minutos de cada episodio. */
     private fun updateSkipIntro() {
         val p = player ?: return
-        val show = kind == Kind.SERIES && !introSkipped && episodePanel.visibility != View.VISIBLE &&
+        var show = kind == Kind.SERIES && !introSkipped && episodePanel.visibility != View.VISIBLE &&
             p.currentPosition in 5_000L..180_000L && p.isPlaying
+        if (show && introShownAt == 0L) introShownAt = System.currentTimeMillis()
+        // Se quita solo a los 12 segundos.
+        if (show && System.currentTimeMillis() - introShownAt > 12_000) {
+            introSkipped = true
+            show = false
+        }
+        // No estorbar mientras están abiertos los controles.
+        if (playerView.isControllerFullyVisible) show = false
         btnSkipIntro.visibility = if (show) View.VISIBLE else View.GONE
     }
 
@@ -761,13 +773,19 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun changeVolume(delta: Int) {
+        prefs.appVolume = prefs.appVolume + delta
+        applyVolume()
+        showVolume()
+    }
+
     private fun showVolume() {
         val level = prefs.appVolume
         findViewById<TextView>(R.id.volumeText).text = if (level == 0) "🔇  0 %" else "🔊  $level %"
         findViewById<ProgressBar>(R.id.volumeBar).progress = level
         findViewById<View>(R.id.volumeBox).visibility = View.VISIBLE
         handler.removeCallbacks(hideVolume)
-        handler.postDelayed(hideVolume, 2000)
+        handler.postDelayed(hideVolume, 4000)
     }
 
     // ---------- Seguir viendo ----------
@@ -832,18 +850,43 @@ class PlayerActivity : AppCompatActivity() {
     // ---------- Control remoto ----------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Barra de volumen abierta: las flechas suben y bajan (para teles cuyo control no manda + / − a la app).
+        if (prefs.appVolumeMode && volumeOpen) {
+            val down = event.action == KeyEvent.ACTION_DOWN
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) changeVolume(10); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT -> { if (down) changeVolume(-10); return true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BACK -> {
+                    if (down) {
+                        handler.removeCallbacks(hideVolume)
+                        findViewById<View>(R.id.volumeBox).visibility = View.GONE
+                    }
+                    return true
+                }
+            }
+        }
+        // Abrir la barra: ▶ en TV en vivo; ▲ en películas y series (con los controles ocultos).
+        if (prefs.appVolumeMode && event.action == KeyEvent.ACTION_DOWN && channelPanel.visibility != View.VISIBLE &&
+            episodePanel.visibility != View.VISIBLE && nextPanel.visibility != View.VISIBLE
+        ) {
+            val isLive = kind == Kind.LIVE && catchupUrl == null
+            val opens = (isLive && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) ||
+                (!isLive && event.keyCode == KeyEvent.KEYCODE_DPAD_UP && !playerView.isControllerFullyVisible)
+            if (opens) {
+                showVolume()
+                return true
+            }
+        }
         // Volumen propio de la app (si se eligió en Ajustes): + / − no van a la tele.
         if (prefs.appVolumeMode && (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                 event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || event.keyCode == KeyEvent.KEYCODE_VOLUME_MUTE)
         ) {
             if (event.action == KeyEvent.ACTION_DOWN) {
-                prefs.appVolume = when (event.keyCode) {
-                    KeyEvent.KEYCODE_VOLUME_UP -> prefs.appVolume + 10
-                    KeyEvent.KEYCODE_VOLUME_DOWN -> prefs.appVolume - 10
-                    else -> if (prefs.appVolume > 0) 0 else 100
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_VOLUME_UP -> changeVolume(10)
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> changeVolume(-10)
+                    else -> changeVolume(if (prefs.appVolume > 0) -prefs.appVolume else 100)
                 }
-                applyVolume()
-                showVolume()
             }
             return true
         }
