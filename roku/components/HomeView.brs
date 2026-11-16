@@ -43,6 +43,7 @@ sub start()
     p = m.top.profile
     m.top.findNode("avatar").uri = AvatarUri(p.avatar)
     m.cats = {}
+    m.catsFailed = false
     m.tab = 0
     paintTabs()
     m.message.text = "Cargando tu catálogo…"
@@ -79,11 +80,13 @@ sub onResponse(msg as object)
     if Left(id, 5) = "cats:" then
         kind = Mid(id, 6)
         m.cats[kind] = filterCats(kind, res.data)
+        if not res.ok then m.catsFailed = true
         if m.cats.live <> invalid and m.cats.movie <> invalid and m.cats.series <> invalid then
-            if m.cats.movie.Count() = 0 and m.cats.series.Count() = 0 and m.cats.live.Count() = 0 then
-                m.message.text = "No se pudo cargar el catálogo. Revisa la cuenta en Ajustes."
-            end if
             render()
+            empty = m.cats.movie.Count() = 0 and m.cats.series.Count() = 0 and m.cats.live.Count() = 0
+            if empty and m.catsFailed = true then
+                m.message.text = "No se pudo conectar con el servidor del proveedor." + Chr(10) + "Presiona Atrás, entra a «Ajustes» y pega el enlace de flowpremium (puerto 2087)."
+            end if
         end if
     else if Left(id, 4) = "row:" then
         parts = id.Split(":")
