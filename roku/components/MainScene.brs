@@ -127,6 +127,7 @@ sub saveAccount(server as string, user as string, pass as string)
     Store_Set("server", NormalizeServer(server))
     Store_Set("user", user)
     Store_Set("pass", pass)
+    Store_Set("tls_relaxed", "0")
     t = CreateObject("roSGNode", "ApiTask")
     t.observeField("response", "onLoginResult")
     t.request = { id: "login", kind: "json", url: ApiUrl("", "") }
@@ -145,12 +146,13 @@ sub onLoginResult(msg as object)
             server = Store_Get("server", "")
             if LCase(Left(server, 8)) = "https://" then Store_Set("server", "http://" + Mid(server, 9))
         end if
+        if res.usedRelaxed = true then Store_Set("tls_relaxed", "1")
         message("✔ Conectado", "La cuenta funciona. Elige un perfil.")
     else if res.data <> invalid then
         message("✖ Usuario o contraseña incorrectos", "El servidor respondió, pero no aceptó la cuenta. Revisa el enlace en «Ajustes».")
     else
-        detail = "Código " + ToStr(res.code)
-        if ToStr(res.reason) <> "" then detail = detail + ": " + ToStr(res.reason)
+        detail = ToStr(res.attempts)
+        if detail = "" then detail = "Código " + ToStr(res.code) + " " + ToStr(res.reason)
         message("✖ No se pudo conectar", "Revisa el servidor (http o https y el puerto). Puedes cambiarlo en «Ajustes»." + Chr(10) + Chr(10) + "Detalle: " + detail)
     end if
 end sub
