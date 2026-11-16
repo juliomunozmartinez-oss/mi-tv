@@ -233,16 +233,28 @@ class XtreamClient(server: String, private val username: String, private val pas
             seasons.getOrPut(season) { mutableListOf() } += ep
         }
 
-        when (val eps = json.opt("episodes")) {
-            is JSONObject -> eps.keys().forEach { k ->
-                val arr = eps.optJSONArray(k) ?: return@forEach
-                for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { addEpisode(it, k.toIntOrNull() ?: 1) }
-            }
-            is JSONArray -> for (i in 0 until eps.length()) {
-                val arr = eps.optJSONArray(i) ?: continue
-                for (j in 0 until arr.length()) arr.optJSONObject(j)?.let { addEpisode(it, i + 1) }
+        // Los proveedores mandan los episodios de muchas formas: {"1":[...]}, [[...],[...]],
+        // una lista plana [...], o {"1":{"0":{...}}}. Se recorre todo y se toma cada episodio.
+        val seen = HashSet<String>()
+        fun walk(node: Any?, seasonHint: Int, depth: Int) {
+            if (depth > 4) return
+            when (node) {
+                is JSONObject -> {
+                    if (node.has("id") && (node.has("episode_num") || node.has("container_extension"))) {
+                        val id = node.str("id") ?: return
+                        if (seen.add(id)) addEpisode(node, seasonHint)
+                        return
+                    }
+                    node.keys().forEach { k -> walk(node.opt(k), k.toIntOrNull() ?: seasonHint, depth + 1) }
+                }
+                is JSONArray -> for (i in 0 until node.length()) {
+                    val child = node.opt(i)
+                    // [[temporada 1], [temporada 2]]: el índice es la temporada.
+                    walk(child, if (child is JSONArray) i + 1 else seasonHint, depth + 1)
+                }
             }
         }
+        walk(json.opt("episodes"), 1, 0)
         seasons.values.forEach { list -> list.sortBy { it.num } }
 
         SeriesDetail(
