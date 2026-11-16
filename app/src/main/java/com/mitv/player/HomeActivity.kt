@@ -243,6 +243,13 @@ class HomeActivity : AppCompatActivity() {
             )
             return
         }
+        if (t == Tab.LIVE) {
+            // TV en vivo tiene su propia pantalla sencilla: lista grande de canales.
+            startActivity(
+                android.content.Intent(this, LiveActivity::class.java).putExtra(Nav.EXTRA_PROFILE, profile.id)
+            )
+            return
+        }
         if (t == tab) {
             focusStart()
             return

@@ -946,7 +946,8 @@ class PlayerActivity : AppCompatActivity() {
                 if (centerLongPressed) {
                     centerLongPressed = false
                 } else if (errorView.visibility == View.VISIBLE) tune(index)
-                else showInfo("${index + 1}  ${channels[index].name}", channels[index].icon)
+                // OK = regresar a la lista de canales (como en la tele de siempre).
+                else finish()
             }
             return true
         }
