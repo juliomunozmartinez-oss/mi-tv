@@ -72,6 +72,7 @@ sub onSettingsLink()
     d = m.top.dialog
     if d.buttonSelected <> 0 then
         d.close = true
+        focusCurrent()
         return
     end if
     text = d.text.Trim()
@@ -81,7 +82,10 @@ sub onSettingsLink()
         saveAccount(parsed.server, parsed.user, parsed.pass)
         return
     end if
-    if text = "" then return
+    if text = "" then
+        focusCurrent()
+        return
+    end if
     m.newServer = text
     askField("Usuario", Store_Get("user", ""), "onSettingsUser")
 end sub
@@ -100,7 +104,11 @@ sub onSettingsUser()
     ok = (d.buttonSelected = 0)
     m.newUser = d.text.Trim()
     d.close = true
-    if ok and m.newUser <> "" then askField("Contraseña", Store_Get("pass", ""), "onSettingsPass")
+    if ok and m.newUser <> "" then
+        askField("Contraseña", Store_Get("pass", ""), "onSettingsPass")
+    else
+        focusCurrent()
+    end if
 end sub
 
 sub onSettingsPass()
@@ -108,7 +116,11 @@ sub onSettingsPass()
     ok = (d.buttonSelected = 0)
     pass = d.text.Trim()
     d.close = true
-    if ok and pass <> "" then saveAccount(m.newServer, m.newUser, pass)
+    if ok and pass <> "" then
+        saveAccount(m.newServer, m.newUser, pass)
+    else
+        focusCurrent()
+    end if
 end sub
 
 sub saveAccount(server as string, user as string, pass as string)
@@ -145,6 +157,20 @@ end sub
 
 sub closeDialog()
     if m.top.dialog <> invalid then m.top.dialog.close = true
+    focusCurrent()
+end sub
+
+' Regresa el control a la pantalla que se está viendo (después de cerrar una ventana).
+sub focusCurrent()
+    if m.video.visible then
+        m.video.setFocus(true)
+    else if m.current = "profiles" then
+        m.profilesView.takeFocus = true
+    else if m.current = "home" then
+        m.homeView.takeFocus = true
+    else if m.current = "detail" then
+        m.detailView.takeFocus = true
+    end if
 end sub
 
 ' ---------- Acciones de Inicio y Ficha ----------
@@ -331,6 +357,10 @@ function onKeyEvent(key as string, press as boolean) as boolean
             end if
         end if
         return false
+    end if
+    if key <> "back" and m.top.dialog = invalid then
+        focusCurrent()
+        return true
     end if
     if key = "back" then
         if m.current = "detail" then
