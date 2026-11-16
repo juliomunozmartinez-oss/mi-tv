@@ -141,6 +141,12 @@
             android:text="Buscar actualizaciones de MuGa TV" />
 
         <TextView
+            android:id="@+id/btnDeadChannels"
+            style="@style/Btn"
+            android:layout_marginTop="12dp"
+            android:text="Volver a mostrar canales sin señal" />
+
+        <TextView
             android:id="@+id/btnRefresh"
             style="@style/Btn"
             android:layout_marginTop="12dp"

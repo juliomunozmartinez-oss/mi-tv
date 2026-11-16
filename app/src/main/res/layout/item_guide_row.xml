@@ -1,21 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:descendantFocusability="afterDescendants"
+    android:layout_height="60dp"
+    android:layout_marginBottom="4dp"
     android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingStart="40dp"
-    android:paddingTop="4dp"
-    android:paddingBottom="4dp">
+    android:orientation="horizontal">
 
     <LinearLayout
         android:id="@+id/channelCell"
-        android:layout_width="210dp"
-        android:layout_height="64dp"
-        android:background="@drawable/bg_item"
-        android:clickable="true"
-        android:focusable="true"
+        android:layout_width="206dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="4dp"
+        android:background="@drawable/card_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="8dp"
@@ -23,8 +19,8 @@
 
         <ImageView
             android:id="@+id/logo"
-            android:layout_width="56dp"
-            android:layout_height="36dp"
+            android:layout_width="52dp"
+            android:layout_height="34dp"
             android:importantForAccessibility="no"
             android:scaleType="fitCenter" />
 
@@ -32,21 +28,17 @@
             android:id="@+id/name"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="2"
             android:textColor="@color/text"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
     </LinearLayout>
 
-    <com.mitv.player.RowRecyclerView
-        android:id="@+id/programs"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:descendantFocusability="afterDescendants"
-        android:paddingStart="8dp"
-        android:paddingEnd="40dp" />
+    <FrameLayout
+        android:id="@+id/timeline"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="true" />
 </LinearLayout>

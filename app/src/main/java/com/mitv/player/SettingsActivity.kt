@@ -88,6 +88,10 @@ class SettingsActivity : AppCompatActivity() {
             text = "Buscar actualizaciones  ·  tienes la build ${BuildConfig.BUILD_NUMBER}"
             setOnClickListener { Updater.checkNow(this@SettingsActivity, lifecycleScope) }
         }
+        findViewById<TextView>(R.id.btnDeadChannels).setOnClickListener {
+            DeadChannels.clear(this)
+            show("Listo: los canales sin señal vuelven a su lugar.", ok = true)
+        }
         findViewById<TextView>(R.id.btnRefresh).setOnClickListener {
             if (!prefs.isConfigured || busy) return@setOnClickListener
             busy = true

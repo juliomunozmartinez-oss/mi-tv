@@ -137,7 +137,14 @@ object Catalog {
 
     private fun apply(d: CatalogData, prefs: Prefs, clearCaches: Boolean) {
         // Canales de México primero; el resto en el orden del proveedor.
-        liveCats = d.liveCats.sortedBy { if (isMexico(it.name)) 0 else 1 }
+        // Primero México, luego canales de cine, luego el resto en el orden del proveedor.
+        liveCats = d.liveCats.sortedBy {
+            when {
+                isMexico(it.name) -> 0
+                isCinema(it.name) -> 1
+                else -> 2
+            }
+        }
         vodCats = d.vodCats
         seriesCats = d.seriesCats
         live = d.live
@@ -167,6 +174,13 @@ object Catalog {
         """infantil|kids|ni[ñn][oa]s|animad|animaci[oó]n|caricatura|cartoon|junior|nick|baby|beb[eé]s|peques|discovery\s*k|familiar""",
         RegexOption.IGNORE_CASE,
     )
+
+    private val cinemaRegex = Regex(
+        """cine|movie|pel[ií]cula|hbo|max|cinemax|star|tnt|fox|universal|paramount|premium|golden|amc|sony|warner|space|studio|film""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun isCinema(name: String) = cinemaRegex.containsMatchIn(name)
 
     fun isMexico(name: String) = mexicoRegex.containsMatchIn(name)
     fun isKids(name: String) = kidsRegex.containsMatchIn(name)

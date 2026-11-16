@@ -14,7 +14,7 @@ android {
         // El número de compilación de GitHub sirve para saber si hay una versión más nueva.
         val build = (System.getenv("BUILD_NUMBER") ?: "13").toInt()
         versionCode = build
-        versionName = "5.0 (build $build)"
+        versionName = "5.1 (build $build)"
         buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 

@@ -1,9 +1,11 @@
 package com.mitv.player
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -23,8 +25,10 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Guía de programación: un renglón por canal con sus programas (lo que ya pasó, lo de ahora y lo que sigue).
- * La programación de cada canal se pide solo cuando su renglón aparece en pantalla.
+ * Guía de programación en cuadrícula: canales hacia abajo, horas hacia la derecha,
+ * cada programa del ancho de lo que dura y una línea roja de «ahora».
+ * Las teclas se manejan aquí (◀ ▶ horario, ▲ ▼ canal); la programación de cada canal
+ * se pide solo cuando su renglón aparece en pantalla.
  */
 class GuideActivity : AppCompatActivity() {
 
@@ -34,10 +38,27 @@ class GuideActivity : AppCompatActivity() {
     private val epg = HashMap<String, List<EpgEntry>>()
     private val loading = HashSet<String>()
     private val limiter = Semaphore(4)
-    private val holders = HashMap<String, Int>()
-    private val dayFmt = SimpleDateFormat("EEE d", Locale("es", "MX"))
-    private val timeFmt = SimpleDateFormat("HH:mm", Locale("es", "MX"))
+
     private lateinit var list: RecyclerView
+    private lateinit var hours: FrameLayout
+    private lateinit var nowLine: View
+    private lateinit var selTimeV: TextView
+    private lateinit var selTitleV: TextView
+    private lateinit var selDescV: TextView
+    private lateinit var dayLabel: TextView
+
+    private val timeFmt = SimpleDateFormat("HH:mm", Locale("es", "MX"))
+    private val dayFmt = SimpleDateFormat("EEEE d", Locale("es", "MX"))
+
+    private var pxPerMin = 0f
+    private var timelineWidth = 0
+    private var viewStart = 0L      // segundos (epoch) en el borde izquierdo
+    private var viewSpan = 3 * 3600L
+    private var selRow = 0
+    private var selTime = 0L
+
+    private val now get() = System.currentTimeMillis() / 1000
+    private val viewEnd get() = viewStart + viewSpan
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,10 +71,19 @@ class GuideActivity : AppCompatActivity() {
         val prefs = Prefs(this)
         client = prefs.client()
         setContentView(R.layout.activity_guide)
-        findViewById<TextView>(R.id.now).text = "Hoy " + timeFmt.format(Date())
         list = findViewById(R.id.list)
+        hours = findViewById(R.id.hours)
+        nowLine = findViewById(R.id.nowLine)
+        selTimeV = findViewById(R.id.selTime)
+        selTitleV = findViewById(R.id.selTitle)
+        selDescV = findViewById(R.id.selDesc)
+        dayLabel = findViewById(R.id.dayLabel)
         list.layoutManager = LinearLayoutManager(this)
         list.itemAnimator = null
+
+        pxPerMin = 4 * resources.displayMetrics.density
+        selTime = now
+        viewStart = (now / 1800) * 1800 - 1800
 
         lifecycleScope.launch {
             channels = withContext(Dispatchers.Default) {
@@ -62,25 +92,210 @@ class GuideActivity : AppCompatActivity() {
             }
             findViewById<View>(R.id.loading).visibility = View.GONE
             list.adapter = Adapter()
-            list.post { list.layoutManager?.findViewByPosition(0)?.requestFocus() }
+            list.post {
+                timelineWidth = list.width - list.paddingStart - (210 * resources.displayMetrics.density).toInt()
+                viewSpan = (timelineWidth / pxPerMin * 60).toLong()
+                renderAll()
+            }
         }
     }
 
-    private fun t(sec: Long) = timeFmt.format(Date(sec * 1000))
+    // ---------- Dibujo ----------
 
-    /** Programas de ayer a mañana, alrededor de ahora. */
-    private fun window(all: List<EpgEntry>): List<EpgEntry> {
-        val now = System.currentTimeMillis() / 1000
-        return all.filter { it.end > now - 24 * 3600 && it.start < now + 24 * 3600 }
+    private fun x(t: Long): Float = (t - viewStart) / 60f * pxPerMin
+
+    private fun renderAll() {
+        drawHours()
+        list.adapter?.notifyDataSetChanged()
+        updateInfo()
     }
 
-    private fun requestEpg(ch: LiveChannel) {
+    private fun drawHours() {
+        hours.removeAllViews()
+        var t = ((viewStart + 1799) / 1800) * 1800
+        while (t < viewEnd) {
+            val tv = TextView(this).apply {
+                text = timeFmt.format(Date(t * 1000))
+                setTextColor(getColor(R.color.text_dim))
+                textSize = 13f
+            }
+            hours.addView(tv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                leftMargin = x(t).toInt()
+            })
+            t += 1800
+        }
+        dayLabel.text = dayFmt.format(Date(selTime * 1000)).replaceFirstChar { it.uppercase() }
+        // Línea roja de «ahora».
+        val nx = x(now)
+        if (nx in 0f..timelineWidth.toFloat()) {
+            nowLine.visibility = View.VISIBLE
+            nowLine.translationX = list.left + list.paddingStart + 210 * resources.displayMetrics.density + nx
+        } else {
+            nowLine.visibility = View.GONE
+        }
+    }
+
+    private fun entriesOf(row: Int): List<EpgEntry>? = channels.getOrNull(row)?.let { epg[it.id] }
+
+    private fun selectedEntry(): EpgEntry? = entriesOf(selRow)?.firstOrNull { selTime >= it.start && selTime < it.end }
+
+    private fun updateInfo() {
+        val ch = channels.getOrNull(selRow) ?: return
+        val e = selectedEntry()
+        if (e == null) {
+            selTimeV.text = ch.name
+            selTitleV.text = if (epg[ch.id] == null) "Cargando programación…" else "Sin información de este horario"
+            selDescV.text = "OK para ver el canal"
+            return
+        }
+        val state = when {
+            e.start <= now && e.end > now -> "AHORA"
+            e.end <= now -> if (e.hasArchive) "YA PASÓ · ⟲ se puede ver" else "YA PASÓ"
+            Reminders.has(this, ch.id, e.start) -> "⏰ CON RECORDATORIO"
+            else -> "MÁS TARDE · OK para recordarte"
+        }
+        selTimeV.text = "${ch.name}  ·  ${timeFmt.format(Date(e.start * 1000))} – ${timeFmt.format(Date(e.end * 1000))}  ·  $state"
+        selTitleV.text = e.title
+        selDescV.text = e.description ?: ""
+    }
+
+    private fun requestEpg(ch: LiveChannel, pos: Int) {
         if (ch.id in epg || !loading.add(ch.id)) return
         lifecycleScope.launch {
             val result = limiter.withPermit { Catalog.fullEpgFor(client, ch.id) }
-            epg[ch.id] = window(result)
+            val t = now
+            epg[ch.id] = result.filter { it.end > t - 24 * 3600 && it.start < t + 24 * 3600 }
             loading.remove(ch.id)
-            holders[ch.id]?.let { pos -> list.adapter?.notifyItemChanged(pos) }
+            list.adapter?.notifyItemChanged(pos)
+            if (pos == selRow) updateInfo()
+        }
+    }
+
+    private inner class Adapter : RecyclerView.Adapter<Adapter.VH>() {
+        inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+            val channelCell: View = v.findViewById(R.id.channelCell)
+            val logo: ImageView = v.findViewById(R.id.logo)
+            val name: TextView = v.findViewById(R.id.name)
+            val timeline: FrameLayout = v.findViewById(R.id.timeline)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_guide_row, parent, false))
+
+        override fun getItemCount() = channels.size
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val ch = channels[position]
+            val selectedRow = position == selRow
+            holder.name.text = ch.name
+            holder.logo.load(ch.icon) { error(R.drawable.ic_launcher); fallback(R.drawable.ic_launcher) }
+            holder.channelCell.alpha = if (selectedRow) 1f else 0.8f
+            holder.timeline.removeAllViews()
+            val entries = epg[ch.id]
+            if (entries == null) requestEpg(ch, position)
+            val gap = (3 * resources.displayMetrics.density).toInt()
+            val visible = entries.orEmpty().filter { it.end > viewStart && it.start < viewEnd }
+            if (visible.isEmpty()) {
+                holder.timeline.addView(
+                    cell(if (entries == null) "Cargando…" else "Sin guía · OK para ver el canal", selectedRow, dim = false),
+                    FrameLayout.LayoutParams(timelineWidth - gap, ViewGroup.LayoutParams.MATCH_PARENT),
+                )
+                return
+            }
+            for (e in visible) {
+                val left = x(maxOf(e.start, viewStart))
+                val right = x(minOf(e.end, viewEnd))
+                val width = (right - left).toInt() - gap
+                if (width <= 0) continue
+                val past = e.end <= now
+                val mark = when {
+                    past && e.hasArchive -> "⟲ "
+                    Reminders.has(this@GuideActivity, ch.id, e.start) -> "⏰ "
+                    else -> ""
+                }
+                val sel = selectedRow && selTime >= e.start && selTime < e.end
+                holder.timeline.addView(
+                    cell(mark + e.title, sel, dim = past && !e.hasArchive, live = e.start <= now && e.end > now),
+                    FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT).apply { leftMargin = left.toInt() },
+                )
+            }
+        }
+    }
+
+    private fun cell(text: String, selected: Boolean, dim: Boolean, live: Boolean = false): TextView =
+        TextView(this).apply {
+            this.text = text
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((10 * resources.displayMetrics.density).toInt(), 0, (6 * resources.displayMetrics.density).toInt(), 0)
+            textSize = 14f
+            setTypeface(typeface, if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            setTextColor(if (selected) getColor(R.color.bg) else getColor(R.color.text))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 8 * resources.displayMetrics.density
+                setColor(
+                    when {
+                        selected -> getColor(R.color.text)
+                        live -> 0xFF1E3A8A.toInt()
+                        else -> getColor(R.color.surface_hi)
+                    }
+                )
+            }
+            alpha = if (dim && !selected) 0.5f else 1f
+        }
+
+    // ---------- Control remoto ----------
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (channels.isEmpty() || timelineWidth <= 0) return super.dispatchKeyEvent(event)
+        val k = event.keyCode
+        val handled = k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN ||
+            k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT ||
+            k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
+        if (!handled) return super.dispatchKeyEvent(event)
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        when (k) {
+            KeyEvent.KEYCODE_DPAD_UP -> moveRow(-1)
+            KeyEvent.KEYCODE_DPAD_DOWN -> moveRow(1)
+            KeyEvent.KEYCODE_DPAD_LEFT -> moveProgram(-1)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> moveProgram(1)
+            else -> if (event.repeatCount == 0) onSelect()
+        }
+        return true
+    }
+
+    private fun moveRow(step: Int) {
+        val target = (selRow + step).coerceIn(0, channels.size - 1)
+        if (target == selRow) return
+        val old = selRow
+        selRow = target
+        list.adapter?.notifyItemChanged(old)
+        list.adapter?.notifyItemChanged(selRow)
+        list.scrollToPosition(selRow)
+        updateInfo()
+    }
+
+    private fun moveProgram(dir: Int) {
+        val entries = entriesOf(selRow).orEmpty()
+        val cur = entries.indexOfFirst { selTime >= it.start && selTime < it.end }
+        val next: EpgEntry? = when {
+            cur >= 0 -> entries.getOrNull(cur + dir)
+            dir > 0 -> entries.firstOrNull { it.start > selTime }
+            else -> entries.lastOrNull { it.end <= selTime }
+        }
+        val newTime = next?.start ?: (selTime + dir * 1800)
+        selTime = newTime.coerceIn(now - 24 * 3600, now + 24 * 3600)
+        // Mover la cuadrícula si el programa quedó fuera de la vista.
+        val start = next?.start ?: selTime
+        val end = next?.end ?: (selTime + 1800)
+        val margin = 10 * 60
+        if (end <= viewStart + margin || start >= viewEnd - margin) {
+            viewStart = if (dir > 0) (start / 1800) * 1800 - 1800 else ((end + 1799) / 1800) * 1800 - viewSpan + 1800
+            renderAll()
+        } else {
+            list.adapter?.notifyItemChanged(selRow)
+            updateInfo()
         }
     }
 
@@ -88,11 +303,17 @@ class GuideActivity : AppCompatActivity() {
         Nav.playLive(this, profile, channels, channels.indexOfFirst { it.id == ch.id }.coerceAtLeast(0))
     }
 
-    private fun onProgram(ch: LiveChannel, e: EpgEntry) {
-        val now = System.currentTimeMillis() / 1000
+    private fun onSelect() {
+        val ch = channels.getOrNull(selRow) ?: return
+        val e = selectedEntry()
+        if (e == null) {
+            play(ch)
+            return
+        }
+        val t = now
         val url = if (e.hasArchive) client.catchupUrl(ch.id, e) else null
         when {
-            e.start <= now && e.end > now -> {
+            e.start <= t && e.end > t -> {
                 if (url == null) {
                     play(ch)
                 } else {
@@ -104,92 +325,20 @@ class GuideActivity : AppCompatActivity() {
                         .show()
                 }
             }
-            e.end <= now -> {
+            e.end <= t -> {
                 if (url != null) Nav.playUrl(this, profile, url, "${ch.name} · ${e.title}")
                 else Toast.makeText(this, "Este programa ya pasó y el canal no lo tiene grabado", Toast.LENGTH_LONG).show()
             }
-            else -> Toast.makeText(this, "«${e.title}» empieza a las ${t(e.start)}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private inner class Adapter : RecyclerView.Adapter<Adapter.VH>() {
-        inner class VH(v: View) : RecyclerView.ViewHolder(v) {
-            val channelCell: View = v.findViewById(R.id.channelCell)
-            val logo: ImageView = v.findViewById(R.id.logo)
-            val name: TextView = v.findViewById(R.id.name)
-            val programs: RowRecyclerView = v.findViewById(R.id.programs)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val vh = VH(LayoutInflater.from(parent.context).inflate(R.layout.item_guide_row, parent, false))
-            vh.programs.layoutManager = LinearLayoutManager(parent.context, LinearLayoutManager.HORIZONTAL, false)
-            vh.programs.itemAnimator = null
-            Ui.scaleOnFocus(vh.channelCell, 1.04f)
-            return vh
-        }
-
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            val ch = channels[position]
-            holders.entries.removeAll { it.value == position }
-            holders[ch.id] = position
-            holder.name.text = ch.name
-            holder.logo.load(ch.icon) { error(R.drawable.ic_launcher); fallback(R.drawable.ic_launcher) }
-            holder.channelCell.setOnClickListener { play(ch) }
-
-            val entries = epg[ch.id]
-            if (entries == null) requestEpg(ch)
-            val now = System.currentTimeMillis() / 1000
-            val nowIndex = entries?.indexOfFirst { it.start <= now && it.end > now }?.takeIf { it >= 0 } ?: 0
-            // Un «Row» solo para que la fila recuerde/arranque en el programa de ahora.
-            val memory = Row(ch.name, emptyList(), false).apply { focusPos = nowIndex }
-            holder.programs.row = memory
-            holder.programs.adapter = Programs(ch, entries)
-            (holder.programs.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(nowIndex, 0)
-        }
-
-        override fun getItemCount() = channels.size
-    }
-
-    private inner class Programs(
-        private val ch: LiveChannel,
-        private val entries: List<EpgEntry>?,
-    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-
-        override fun getItemCount() = if (entries.isNullOrEmpty()) 1 else entries.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_guide_cell, parent, false)
-            Ui.scaleOnFocus(v, 1.04f)
-            return object : RecyclerView.ViewHolder(v) {}
-        }
-
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            val v = holder.itemView
-            val time = v.findViewById<TextView>(R.id.time)
-            val title = v.findViewById<TextView>(R.id.title)
-            val nowBar = v.findViewById<View>(R.id.nowBar)
-            if (entries.isNullOrEmpty()) {
-                time.text = if (entries == null) "Cargando…" else ""
-                title.text = if (entries == null) "" else "Sin guía · OK para ver el canal"
-                nowBar.visibility = View.GONE
-                v.alpha = 1f
-                v.setOnClickListener { play(ch) }
-                return
+            else -> {
+                val on = Reminders.toggle(this, Reminders.Item(ch.id, ch.name, e.title, e.start))
+                Toast.makeText(
+                    this,
+                    if (on) "⏰ Te aviso 2 minutos antes de «${e.title}»" else "Recordatorio quitado",
+                    Toast.LENGTH_LONG,
+                ).show()
+                list.adapter?.notifyItemChanged(selRow)
+                updateInfo()
             }
-            val e = entries[position]
-            val now = System.currentTimeMillis() / 1000
-            val isNow = e.start <= now && e.end > now
-            val past = e.end <= now
-            val day = if (Date(e.start * 1000).let { dayFmt.format(it) } != dayFmt.format(Date())) dayFmt.format(Date(e.start * 1000)) + " · " else ""
-            time.text = buildString {
-                append(day).append(t(e.start)).append(" – ").append(t(e.end))
-                if (isNow) append("  ·  AHORA")
-                if (past && e.hasArchive) append("  ·  ⟲ grabado")
-            }
-            title.text = e.title
-            nowBar.visibility = if (isNow) View.VISIBLE else View.GONE
-            v.alpha = if (past && !e.hasArchive) 0.5f else 1f
-            v.setOnClickListener { onProgram(ch, e) }
         }
     }
 }

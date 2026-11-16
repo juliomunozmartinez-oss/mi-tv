@@ -96,6 +96,7 @@ class HomeActivity : AppCompatActivity() {
         profile = p
         prefs = Prefs(this)
         store = ProfileStore(this, profile.id)
+        LastProfile.set(this, profile.id)
         setContentView(R.layout.activity_home)
 
         rows = findViewById(R.id.rows)
@@ -461,6 +462,8 @@ class HomeActivity : AppCompatActivity() {
     private fun movieCard(m: Movie) = Card(Kind.MOVIE, m.id, m.name, image = m.poster)
     private fun seriesCard(s: Series) = Card(Kind.SERIES, s.id, s.name, image = s.poster)
     private fun liveCard(c: LiveChannel) = Card(Kind.LIVE, c.id, c.name, image = c.icon, logo = true)
+    private fun liveCardD(c: LiveChannel, dead: Set<String>) =
+        Card(Kind.LIVE, c.id, c.name, subtitle = if (c.id in dead) "Sin señal" else null, image = c.icon, logo = true)
     private fun resumeCard(r: Resume) =
         Card(r.kind, r.id, r.title, r.subtitle, r.image, progress = r.progress, resume = r)
 
@@ -542,9 +545,16 @@ class HomeActivity : AppCompatActivity() {
                 hero = pickMovieHero(v.recentMovies.take(30)) ?: pickSeriesHero(v.recentSeries.take(30))
             }
             Tab.LIVE -> {
+                val dead = DeadChannels.deadIds(this)
+                val mine = store.myList.filter { it.startsWith("live:") && v.canSee(it) }
+                    .mapNotNull { Catalog.liveById[it.removePrefix("live:")] }
+                if (mine.isNotEmpty()) list += row("⭐ Mis canales", mine, true) { liveCardD(it, dead) }
+                val recent = store.recentChannels().mapNotNull { Catalog.liveById[it] }.filter { v.canSee("live:${it.id}") }
+                if (recent.isNotEmpty()) list += Row("🕘 Vistos recientemente", recent.map { liveCardD(it, dead) }, wide = true)
                 v.liveCats.forEach { c ->
-                    val items = v.liveIn(c.id)
-                    if (items.isNotEmpty()) list += row(c.name, items, true, ::liveCard)
+                    // Los canales sin señal se pasan al final.
+                    val items = v.liveIn(c.id).sortedBy { if (it.id in dead) 1 else 0 }
+                    if (items.isNotEmpty()) list += row(c.name, items, true) { liveCardD(it, dead) }
                 }
                 if (list.isNotEmpty()) {
                     hero = Featured(

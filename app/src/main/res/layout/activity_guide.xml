@@ -8,51 +8,95 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingTop="28dp">
+        android:paddingTop="24dp">
 
+        <!-- Encabezado: programa seleccionado -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="bottom"
-            android:orientation="horizontal"
-            android:paddingStart="48dp"
-            android:paddingEnd="48dp">
+            android:layout_height="96dp"
+            android:orientation="vertical"
+            android:paddingStart="40dp"
+            android:paddingEnd="40dp">
 
             <TextView
+                android:id="@+id/selTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Guía de programación"
+                android:textColor="@color/accent_soft"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/selTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
                 android:textColor="@color/text"
-                android:textSize="26sp"
+                android:textSize="24sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/now"
-                android:layout_width="0dp"
+                android:id="@+id/selDesc"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:layout_marginBottom="3dp"
-                android:layout_weight="1"
-                android:textColor="@color/accent_soft"
-                android:textSize="16sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="3dp"
-                android:text="◀ ▶ horarios  ·  ▲ ▼ canales  ·  ⟲ = se puede ver aunque ya pasó"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:textColor="@color/text_dim"
                 android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Barra de horas -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="30dp"
+            android:orientation="horizontal"
+            android:paddingStart="40dp">
+
+            <TextView
+                android:id="@+id/dayLabel"
+                android:layout_width="210dp"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:textColor="@color/text_dim"
+                android:textSize="13sp" />
+
+            <FrameLayout
+                android:id="@+id/hours"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="true" />
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginTop="12dp"
             android:clipToPadding="false"
-            android:paddingBottom="40dp" />
+            android:descendantFocusability="blocksDescendants"
+            android:focusable="false"
+            android:paddingStart="40dp"
+            android:paddingBottom="30dp" />
     </LinearLayout>
+
+    <!-- Línea de «ahora» -->
+    <View
+        android:id="@+id/nowLine"
+        android:layout_width="2dp"
+        android:layout_height="match_parent"
+        android:layout_marginTop="150dp"
+        android:background="#FFEF4444" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_overlay"
+        android:padding="8dp"
+        android:text="◀ ▶ horario · ▲ ▼ canal · OK ver / ⏰ recordar · ⟲ se puede ver aunque ya pasó"
+        android:textColor="@color/text_dim"
+        android:textSize="12sp" />
 
     <ProgressBar
         android:id="@+id/loading"

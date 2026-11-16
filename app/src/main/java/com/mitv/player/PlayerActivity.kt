@@ -76,6 +76,12 @@ class PlayerActivity : AppCompatActivity() {
     private var countdown = 0
     private var centerLongPressed = false
     private var recorded = false
+    private lateinit var channelPanel: View
+    private lateinit var panelChannels: androidx.recyclerview.widget.RecyclerView
+    /** Canal que se estaba viendo al abrir la lista (para regresar con Atrás). */
+    private var panelOrigin = -1
+    private val panelTune = Runnable { panelPreview() }
+    private var panelFocus = -1
     private lateinit var episodePanel: View
     private lateinit var panelSeasons: androidx.recyclerview.widget.RecyclerView
     private lateinit var panelEpisodes: androidx.recyclerview.widget.RecyclerView
@@ -157,6 +163,10 @@ class PlayerActivity : AppCompatActivity() {
         nextTitle = findViewById(R.id.nextTitle)
         nextCountdown = findViewById(R.id.nextCountdown)
         findViewById<View>(R.id.btnNextNow).setOnClickListener { playNextNow() }
+        channelPanel = findViewById(R.id.channelPanel)
+        panelChannels = findViewById(R.id.panelChannels)
+        panelChannels.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        panelChannels.itemAnimator = null
         episodePanel = findViewById(R.id.episodePanel)
         panelSeasons = findViewById(R.id.panelSeasons)
         panelEpisodes = findViewById(R.id.panelEpisodes)
@@ -317,6 +327,9 @@ class PlayerActivity : AppCompatActivity() {
                         errorView.visibility = View.GONE
                         // Al empezar a ver algo, que aparezca de inmediato en «Seguir viendo».
                         if (!wasPlaying && kind != Kind.LIVE) saveProgress(ended = false, force = true)
+                        if (kind == Kind.LIVE && catchupUrl == null) {
+                            channels.getOrNull(index)?.let { DeadChannels.recordSuccess(this@PlayerActivity, it.id) }
+                        }
                         wasPlaying = true
                         retries = 0
                     }
@@ -381,6 +394,18 @@ class PlayerActivity : AppCompatActivity() {
 
     // ---------- TV en vivo ----------
 
+    /** Cambia al canal siguiente/anterior, saltándose los que están «sin señal». */
+    private fun zap(step: Int) {
+        val n = channels.size
+        val dead = DeadChannels.deadIds(this)
+        var i = index
+        for (k in 0 until n) {
+            i = ((i + step) % n + n) % n
+            if (channels[i].id !in dead) break
+        }
+        tune(i)
+    }
+
     private fun tune(i: Int) {
         val n = channels.size
         index = ((i % n) + n) % n
@@ -390,6 +415,7 @@ class PlayerActivity : AppCompatActivity() {
         retries = 0
         handler.removeCallbacks(retry)
         val ch = channels[index]
+        store.addRecentChannel(ch.id)
         val star = if (store.inList("live:${ch.id}")) "★ " else ""
         showInfo("${index + 1}  $star${ch.name}", ch.icon)
         loadEpg(ch)
@@ -434,11 +460,81 @@ class PlayerActivity : AppCompatActivity() {
             }
             else -> {
                 loadingView.visibility = View.GONE
+                DeadChannels.recordFailure(this, channels[index].id)
                 errorView.text = "No se pudo abrir «${channels[index].name}».\n(${error.errorCodeName})\n\n" +
                     "▲ ▼ para cambiar de canal · OK para reintentar"
                 errorView.visibility = View.VISIBLE
             }
         }
+    }
+
+    // ---------- Lista de canales encima del video ----------
+
+    private fun openChannelPanel() {
+        if (channels.isEmpty()) return
+        panelOrigin = index
+        panelFocus = index
+        overlay.visibility = View.GONE
+        channelPanel.visibility = View.VISIBLE
+        val dead = DeadChannels.deadIds(this)
+        panelChannels.adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(
+                parent: android.view.ViewGroup, viewType: Int,
+            ): androidx.recyclerview.widget.RecyclerView.ViewHolder {
+                val v = layoutInflater.inflate(R.layout.item_channel_row, parent, false)
+                return object : androidx.recyclerview.widget.RecyclerView.ViewHolder(v) {}
+            }
+
+            override fun onBindViewHolder(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, position: Int) {
+                val ch = channels[position]
+                val v = holder.itemView
+                v.findViewById<TextView>(R.id.name).text = "${position + 1}  ${ch.name}"
+                v.findViewById<ImageView>(R.id.logo).load(ch.icon) { error(R.drawable.ic_launcher); fallback(R.drawable.ic_launcher) }
+                val now = v.findViewById<TextView>(R.id.now)
+                now.text = if (ch.id in dead) "Sin señal" else ""
+                v.alpha = if (ch.id in dead) 0.5f else 1f
+                v.setOnFocusChangeListener { _, has ->
+                    if (has) {
+                        panelFocus = holder.bindingAdapterPosition
+                        // Al detenerse en un canal, se ve detrás de la lista.
+                        handler.removeCallbacks(panelTune)
+                        handler.postDelayed(panelTune, 700)
+                    }
+                }
+                v.setOnClickListener {
+                    panelFocus = holder.bindingAdapterPosition
+                    closeChannelPanel(keep = true)
+                }
+                if (ch.id !in dead) lifecycleScope.launch {
+                    val epg = Catalog.epgFor(client, ch.id)
+                    val cur = epg.firstOrNull()
+                    if (holder.bindingAdapterPosition == position && cur != null) now.text = "Ahora: ${cur.title}"
+                }
+            }
+
+            override fun getItemCount() = channels.size
+        }
+        panelChannels.scrollToPosition(index)
+        panelChannels.post {
+            panelChannels.layoutManager?.findViewByPosition(index)?.requestFocus()
+        }
+    }
+
+    private fun panelPreview() {
+        val i = panelFocus
+        if (channelPanel.visibility != View.VISIBLE || i < 0 || i == index) return
+        tune(i)
+        overlay.visibility = View.GONE
+    }
+
+    /** keep = quedarse en el canal enfocado; si no, regresar al que se estaba viendo. */
+    private fun closeChannelPanel(keep: Boolean) {
+        handler.removeCallbacks(panelTune)
+        channelPanel.visibility = View.GONE
+        val target = if (keep) panelFocus else panelOrigin
+        if (target >= 0 && target != index) tune(target)
+        else channels.getOrNull(index)?.let { showInfo("${index + 1}  ${it.name}", it.icon) }
+        playerView.requestFocus()
     }
 
     // ---------- Películas ----------
@@ -728,6 +824,21 @@ class PlayerActivity : AppCompatActivity() {
             return super.dispatchKeyEvent(event)
         }
 
+        if (channelPanel.visibility == View.VISIBLE) {
+            val down = event.action == KeyEvent.ACTION_DOWN
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    if (down) closeChannelPanel(keep = false)
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (down) closeChannelPanel(keep = true)
+                    return true
+                }
+            }
+            return super.dispatchKeyEvent(event)
+        }
+
         val key = event.keyCode
         val isCenter = key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER
 
@@ -751,9 +862,10 @@ class PlayerActivity : AppCompatActivity() {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
 
         return when (key) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> { tune(index - 1); true }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_UP -> { tune(index + 1); true }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_INFO -> {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> { zap(-1); true }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_UP -> { zap(1); true }
+            KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanel(); true }
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_INFO -> {
                 showInfo("${index + 1}  ${channels[index].name}", channels[index].icon); true
             }
             else -> super.dispatchKeyEvent(event)

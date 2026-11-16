@@ -157,4 +157,13 @@ class ProfileStore(context: Context, profileId: String) {
     }
 
     fun watched(): List<String> = (sp.getString("watched_eps", "") ?: "").split('\n').filter { it.isNotBlank() }
+
+    // ---- Canales vistos recientemente ----
+    fun addRecentChannel(channelId: String) {
+        val list = (listOf(channelId) + recentChannels().filter { it != channelId }).take(10)
+        sp.edit().putString("recent_live", list.joinToString("\n")).apply()
+    }
+
+    fun recentChannels(): List<String> =
+        (sp.getString("recent_live", "") ?: "").split('\n').filter { it.isNotBlank() }
 }

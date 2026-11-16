@@ -192,4 +192,41 @@
             android:paddingTop="14dp"
             android:paddingEnd="48dp" />
     </LinearLayout>
+
+    <!-- Lista de canales encima del video (◀ en TV en vivo) -->
+    <LinearLayout
+        android:id="@+id/channelPanel"
+        android:layout_width="440dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/scrim_left"
+        android:orientation="vertical"
+        android:paddingStart="32dp"
+        android:paddingTop="28dp"
+        android:paddingEnd="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/panelTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Canales"
+            android:textColor="@color/text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:text="▲ ▼ ver otro · OK quedarse · Atrás regresar"
+            android:textColor="@color/text_dim"
+            android:textSize="12sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/panelChannels"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="40dp" />
+    </LinearLayout>
 </FrameLayout>
