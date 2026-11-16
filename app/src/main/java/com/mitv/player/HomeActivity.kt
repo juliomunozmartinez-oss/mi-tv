@@ -271,6 +271,11 @@ class HomeActivity : AppCompatActivity() {
 
     // ---------- Zona de avance ----------
 
+    /** Qué se ve ahora arriba: la clave del póster, o FEATURED_KEY para el destacado. */
+    private var shownKey: String? = null
+    /** Sube con cada cambio de foco/pestaña; una carga vieja que regrese tarde se descarta. */
+    private var previewGen = 0
+
     private fun setPreview(label: String, title: String, meta: String?, plot: String?, image: String?) {
         pLabel.text = label
         pTitle.text = title
@@ -285,7 +290,9 @@ class HomeActivity : AppCompatActivity() {
 
     private fun showFeatured() {
         previewJob?.cancel()
+        previewGen++
         previewKey = null
+        shownKey = FEATURED_KEY
         val f = featured
         if (f == null) {
             heroButtons.visibility = View.GONE
@@ -306,13 +313,16 @@ class HomeActivity : AppCompatActivity() {
         if (!prefs.autoPreview || tab == Tab.SEARCH) return
         val card = row.cards.getOrNull(index) ?: return
         val key = "${card.kind}:${card.id}"
-        if (key == previewKey) return
+        if (key == previewKey && key == shownKey) return
         previewKey = key
         previewJob?.cancel()
+        val gen = ++previewGen
+        val forTab = tab
         previewJob = lifecycleScope.launch {
             delay(450)
+            if (gen != previewGen || tab != forTab) return@launch
             heroButtons.visibility = View.GONE
-            showCardPreview(card)
+            showCardPreview(card) { gen == previewGen && tab == forTab }
         }
     }
 
@@ -393,8 +403,10 @@ class HomeActivity : AppCompatActivity() {
         rowsLayout.startSmoothScroll(scroller)
     }
 
-    private suspend fun showCardPreview(card: Card) {
+    private suspend fun showCardPreview(card: Card, current: () -> Boolean) {
         val client = prefs.client()
+        val key = "${card.kind}:${card.id}"
+        shownKey = key
         when (card.kind) {
             Kind.MOVIE -> {
                 val m = Catalog.movieById[card.id] ?: return
@@ -404,7 +416,7 @@ class HomeActivity : AppCompatActivity() {
                     cached?.backdrop ?: m.poster,
                 )
                 val d = runCatching { Catalog.movieDetail(client, m) }.getOrNull() ?: return
-                if (previewKey != "${card.kind}:${card.id}") return
+                if (!current() || previewKey != key) return
                 setPreview(
                     "PELÍCULA", d.name,
                     listOfNotNull(d.year, Ui.ratingText(d.rating), Ui.duration(d.durationSecs), d.genre)
@@ -416,7 +428,7 @@ class HomeActivity : AppCompatActivity() {
                 val s = Catalog.seriesById[card.id] ?: return
                 setPreview("SERIE", s.name, Ui.ratingText(s.rating.toString()), s.plot, s.backdrop ?: s.poster)
                 val d = runCatching { Catalog.seriesDetail(client, s.id) }.getOrNull() ?: return
-                if (previewKey != "${card.kind}:${card.id}") return
+                if (!current() || previewKey != key) return
                 val n = d.seasons.size
                 setPreview(
                     "SERIE", d.name,
@@ -431,7 +443,7 @@ class HomeActivity : AppCompatActivity() {
                 val ch = Catalog.liveById[card.id] ?: return
                 setPreview("EN VIVO", ch.name, "Buscando programación…", null, null)
                 val epg = Catalog.epgFor(client, ch.id)
-                if (previewKey != "${card.kind}:${card.id}") return
+                if (!current() || previewKey != key) return
                 showEpg(ch.name, epg)
             }
         }
@@ -494,6 +506,8 @@ class HomeActivity : AppCompatActivity() {
             adapter.rows[target].focusPos = cardPos.coerceIn(0, maxOf(0, adapter.rows[target].cards.size - 1))
             heroButtons.visibility = View.GONE
             focusRow(target)
+            // Aunque el foco no cambie de póster, la parte de arriba debe mostrar ese póster.
+            adapter.rows.getOrNull(target)?.let { onCardFocused(it, it.focusPos) }
         }
     }
 
@@ -748,7 +762,7 @@ class HomeActivity : AppCompatActivity() {
                         if (n > 0) "$n temporada${if (n > 1) "s" else ""}" else null, d.genre,
                     ).joinToString("  ·  ").ifBlank { null }
                 }
-                if (featured === f && previewKey == null) showFeatured()
+                if (featured === f && previewKey == null && shownKey == FEATURED_KEY) showFeatured()
             }
         }
     }
@@ -855,5 +869,6 @@ class HomeActivity : AppCompatActivity() {
     companion object {
         private const val ROW_LIMIT = 20
         private const val GUIDE_ID = "__guide__"
+        private const val FEATURED_KEY = "__featured__"
     }
 }
