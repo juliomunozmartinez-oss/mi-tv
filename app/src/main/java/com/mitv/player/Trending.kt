@@ -17,7 +17,12 @@ object Trending {
         "https://github.com/juliomunozmartinez-oss/mi-tv/releases/download/trending/trending.json"
     private const val MAX_AGE_MS = 20 * 60 * 60 * 1000L
 
-    class Result(val movies: List<Movie>, val series: List<Series>) {
+    class Result(
+        val movies: List<Movie>,
+        val series: List<Series>,
+        val mxMovies: List<Movie> = emptyList(),
+        val mxSeries: List<Series> = emptyList(),
+    ) {
         val isEmpty get() = movies.isEmpty() && series.isEmpty()
     }
 
@@ -33,6 +38,8 @@ object Trending {
         val json = load(File(ctx.filesDir, "trending.json")) ?: return@withContext Result(emptyList(), emptyList())
         val movies = entries(json, "movies")
         val series = entries(json, "series")
+        val mxMovies = entries(json, "mx_movies")
+        val mxSeries = entries(json, "mx_series")
         val result = withContext(Dispatchers.Default) {
             // Reusa los títulos ya preparados para Buscar (mucho más rápido que volver a procesarlos).
             val idx = SearchIndex.get(prefs, profile, v)
@@ -46,7 +53,10 @@ object Trending {
                     else -> Unit
                 }
             }
-            Result(pick(movies, movieByKey), pick(series, seriesByKey))
+            Result(
+                pick(movies, movieByKey), pick(series, seriesByKey),
+                pick(mxMovies, movieByKey), pick(mxSeries, seriesByKey),
+            )
         }
         memo[profile.id] = result
         result
@@ -63,7 +73,9 @@ object Trending {
     }
 
     private fun load(file: File): JSONObject? {
-        val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < MAX_AGE_MS
+        // Si el guardado es de antes de las listas mexicanas, bajarlo de nuevo.
+        val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < MAX_AGE_MS &&
+            runCatching { file.readText().contains("\"mx_movies\"") }.getOrDefault(false)
         if (!fresh) {
             runCatching {
                 val conn = URL(URL_JSON).openConnection() as HttpURLConnection
