@@ -44,6 +44,10 @@ sub init()
     m.rows.observeField("rowItemFocused", "onItemFocused")
     m.rows.observeField("rowItemSelected", "onItemSelected")
     m.infoTimer.observeField("fire", "loadHeroInfo")
+    m.topTimer = CreateObject("roSGNode", "Timer")
+    m.topTimer.duration = 4
+    m.topTimer.repeat = false
+    m.topTimer.observeField("fire", "requestTop")
 end sub
 
 sub start()
@@ -93,8 +97,8 @@ sub onResponse(msg as object)
         if not res.ok then m.catsFailed = true
         if m.cats.live <> invalid and m.cats.movie <> invalid and m.cats.series <> invalid then
             render()
-            ' El Top 10 llega después, sin hacer esperar la pantalla.
-            m.index.request = { id: "top", type: "top", movieCats: catDict("movie"), seriesCats: catDict("series") }
+            ' El Top 10 llega después (unos segundos), sin hacer esperar la pantalla.
+            m.topTimer.control = "start"
             empty = m.cats.movie.Count() = 0 and m.cats.series.Count() = 0 and m.cats.live.Count() = 0
             if empty and m.catsFailed = true then
                 m.message.text = "No se pudo conectar con el servidor del proveedor." + Chr(10) + "Presiona Atrás, entra a «Ajustes» y pega el enlace de flowpremium (puerto 2087)."
@@ -238,6 +242,10 @@ sub addTopRow(root as object, sizes as object, kindWord as string)
             m.rowInfo.Push({ loaded: true })
         end if
     end for
+end sub
+
+sub requestTop()
+    m.index.request = { id: "top", type: "top", movieCats: catDict("movie"), seriesCats: catDict("series") }
 end sub
 
 ' Categorías que puede ver este perfil (invalid = todas, para adultos).

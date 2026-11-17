@@ -72,16 +72,18 @@ function ensureIndex() as boolean
             action = "get_series"
             catAction = "get_series_categories"
         end if
-        ' Primero todo de una vez; si es demasiado grande para el Roku, categoría por categoría.
-        if not addFrom(entries, kind, ApiUrl(action, "")) then
-            r = HttpGet(ApiUrl(catAction, ""), m.relaxed)
-            if r.body = invalid then return false
-            cats = ParseJson(r.body)
-            if type(cats) <> "roArray" then return false
-            for each c in cats
-                addFrom(entries, kind, ApiUrl(action, "&category_id=" + ToStr(c.category_id)))
-            end for
-        end if
+        ' Categoría por categoría y con pausas: bajar todo de un jalón llenaba la memoria
+        ' del Roku y la pantalla se quedaba trabada.
+        r = HttpGet(ApiUrl(catAction, ""), m.relaxed)
+        if r.body = invalid then return false
+        cats = ParseJson(r.body)
+        r = invalid
+        if type(cats) <> "roArray" then return false
+        for each c in cats
+            addFrom(entries, kind, ApiUrl(action, "&category_id=" + ToStr(c.category_id)))
+            sleep(40)
+        end for
+        cats = invalid
     end for
     m.entries = entries
     return true
@@ -93,7 +95,11 @@ function addFrom(entries as object, kind as string, url as string) as boolean
     data = ParseJson(r.body)
     r = invalid
     if type(data) <> "roArray" then return false
+    n = 0
     for each it in data
+        n = n + 1
+        ' Dejar respirar a la pantalla mientras se procesa.
+        if n mod 150 = 0 then sleep(5)
         e = { k: kind, t: ToStr(it.name), c: ToStr(it.category_id) }
         if kind = "series" then
             e.id = ToStr(it.series_id)
@@ -106,6 +112,7 @@ function addFrom(entries as object, kind as string, url as string) as boolean
         e.n = Norm(e.t)
         entries.Push(e)
     end for
+    data = invalid
     return true
 end function
 
