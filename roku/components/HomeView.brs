@@ -2,7 +2,14 @@
 ' Las filas de cada categoría se piden al servidor solo cuando se acercan a la pantalla.
 
 sub init()
-    m.tabNames = ["Inicio", "TV en vivo", "Películas", "Series", "Mi lista"]
+    m.tabNames = ["Inicio", "TV en vivo", "Películas", "Series", "Mi lista", "Buscar"]
+    m.top10 = invalid
+    m.searchResults = invalid
+    m.searchQuery = ""
+    ' Tarea que se queda viva: busca en todo el catálogo y arma el Top 10.
+    m.index = CreateObject("roSGNode", "IndexTask")
+    m.index.observeField("response", "onIndexResponse")
+    m.index.control = "RUN"
     m.tab = 0
     m.focusArea = "tabs"
     m.gen = 0
@@ -45,6 +52,9 @@ sub start()
     m.cats = {}
     m.catsFailed = false
     m.tab = 0
+    m.top10 = invalid
+    m.searchResults = invalid
+    m.searchQuery = ""
     paintTabs()
     m.message.text = "Cargando tu catálogo…"
     ' Las tres listas de categorías se piden al mismo tiempo.
@@ -83,6 +93,8 @@ sub onResponse(msg as object)
         if not res.ok then m.catsFailed = true
         if m.cats.live <> invalid and m.cats.movie <> invalid and m.cats.series <> invalid then
             render()
+            ' El Top 10 llega después, sin hacer esperar la pantalla.
+            m.index.request = { id: "top", type: "top", movieCats: catDict("movie"), seriesCats: catDict("series") }
             empty = m.cats.movie.Count() = 0 and m.cats.series.Count() = 0 and m.cats.live.Count() = 0
             if empty and m.catsFailed = true then
                 m.message.text = "No se pudo conectar con el servidor del proveedor." + Chr(10) + "Presiona Atrás, entra a «Ajustes» y pega el enlace de flowpremium (puerto 2087)."
@@ -150,6 +162,8 @@ sub render()
 
     if m.tab = 0 then
         addResumeRow(root, sizes, pid)
+        addTopRow(root, sizes, "películas")
+        addTopRow(root, sizes, "series")
         addMyListRows(root, sizes, pid, true)
         n = 0
         for each c in m.cats.movie
@@ -166,19 +180,37 @@ sub render()
             addCategoryRow(root, sizes, c, "live")
         end for
     else if m.tab = 2 then
+        addTopRow(root, sizes, "películas")
         for each c in m.cats.movie
             addCategoryRow(root, sizes, c, "movie")
         end for
     else if m.tab = 3 then
+        addTopRow(root, sizes, "series")
         for each c in m.cats.series
             addCategoryRow(root, sizes, c, "series")
         end for
     else if m.tab = 4 then
         addMyListRows(root, sizes, pid, false)
+    else if m.tab = 5 then
+        if m.searchResults <> invalid then
+            for i = 0 to m.searchResults.getChildCount() - 1
+                root.appendChild(m.searchResults.getChild(i).clone(true))
+                sizes.Push([200, 300])
+                m.rowInfo.Push({ loaded: true })
+            end for
+        end if
     end if
 
     if root.getChildCount() = 0 then
-        if m.tab = 4 then
+        if m.tab = 5 then
+            if m.searchQuery <> "" and m.searchResults <> invalid then
+                m.message.text = "No encontré nada con «" + m.searchQuery + "». Presiona OK para buscar otra cosa."
+            else if m.searchQuery <> "" then
+                m.message.text = "Buscando «" + m.searchQuery + "»…" + Chr(10) + "La primera vez tarda un poco porque revisa todo el catálogo."
+            else
+                m.message.text = "Presiona OK para buscar una película o serie."
+            end if
+        else if m.tab = 4 then
             m.message.text = "Aún no tienes nada en Mi lista. En la ficha de una película o serie elige «+ Mi lista»."
         else
             m.message.text = "No hay contenido en esta sección."
@@ -193,6 +225,81 @@ sub render()
     m.rows.jumpToRowItem = [0, 0]
     loadAround(0)
     showFirstHero()
+end sub
+
+' Fila del Top 10 (si ya llegó). kindWord = "películas" o "series".
+sub addTopRow(root as object, sizes as object, kindWord as string)
+    if m.top10 = invalid then return
+    for i = 0 to m.top10.getChildCount() - 1
+        row = m.top10.getChild(i)
+        if Instr(1, row.title, kindWord) > 0 then
+            root.appendChild(row.clone(true))
+            sizes.Push([200, 300])
+            m.rowInfo.Push({ loaded: true })
+        end if
+    end for
+end sub
+
+' Categorías que puede ver este perfil (invalid = todas, para adultos).
+function catDict(kind as string) as dynamic
+    if m.top.profile.kids <> true then return invalid
+    d = {}
+    for each c in m.cats[kind]
+        d[c.id] = true
+    end for
+    return d
+end function
+
+sub onIndexResponse(msg as object)
+    res = msg.getData()
+    if res.type = "top" then
+        if res.ok and res.content <> invalid and res.content.getChildCount() > 0 then
+            m.top10 = res.content
+            ' Solo se redibuja si nadie está moviéndose por las filas (para no mover el foco).
+            if m.focusArea = "tabs" and (m.tab = 0 or m.tab = 2 or m.tab = 3) then render()
+        end if
+    else if res.type = "search" then
+        if res.ok then
+            m.searchResults = res.content
+        else
+            m.searchResults = CreateObject("roSGNode", "ContentNode")
+        end if
+        if m.tab = 5 then
+            render()
+            if not res.ok then m.message.text = res.message
+            if m.rows.content <> invalid and m.rows.content.getChildCount() > 0 then
+                m.focusArea = "rows"
+                m.rows.setFocus(true)
+                paintTabs()
+            end if
+        end if
+    end if
+end sub
+
+' ---------- Buscar ----------
+
+sub openSearch()
+    d = CreateObject("roSGNode", "StandardKeyboardDialog")
+    d.title = "Buscar película o serie"
+    d.text = m.searchQuery
+    d.buttons = ["Buscar", "Cancelar"]
+    d.observeField("buttonSelected", "onSearchDialog")
+    m.top.getScene().dialog = d
+end sub
+
+sub onSearchDialog()
+    d = m.top.getScene().dialog
+    if d = invalid then return
+    ok = (d.buttonSelected = 0)
+    q = d.text.Trim()
+    d.close = true
+    m.focusArea = "tabs"
+    m.top.setFocus(true)
+    if not ok or q = "" then return
+    m.searchQuery = q
+    m.searchResults = invalid
+    render()
+    m.index.request = { id: "search", type: "search", q: q, movieCats: catDict("movie"), seriesCats: catDict("series") }
 end sub
 
 sub addCategoryRow(root as object, sizes as object, c as object, itemKind as string)
@@ -428,6 +535,9 @@ function onKeyEvent(key as string, press as boolean) as boolean
             paintTabs()
             render()
             return true
+        else if m.tab = 5 and (key = "OK" or (key = "down" and m.rows.content = invalid)) then
+            openSearch()
+            return true
         else if (key = "down" or key = "OK") and m.rows.content <> invalid then
             m.focusArea = "rows"
             m.rows.setFocus(true)
@@ -436,8 +546,16 @@ function onKeyEvent(key as string, press as boolean) as boolean
         end if
         return false
     end if
-    ' En las filas: arriba desde la primera fila (o Atrás) regresa a las pestañas.
-    if key = "up" or key = "back" then
+    ' En las filas: Atrás regresa de un salto a la primera fila y a las pestañas;
+    ' arriba desde la primera fila también.
+    if key = "back" then
+        if m.rows.content <> invalid and m.rows.content.getChildCount() > 0 then m.rows.jumpToRowItem = [0, 0]
+        m.focusArea = "tabs"
+        m.top.setFocus(true)
+        paintTabs()
+        return true
+    end if
+    if key = "up" then
         m.focusArea = "tabs"
         m.top.setFocus(true)
         paintTabs()

@@ -7,4 +7,5 @@
     </interface>
     <script type="text/brightscript" uri="ApiTask.brs" />
     <script type="text/brightscript" uri="Utils.brs" />
+    <script type="text/brightscript" uri="Http.brs" />
 </component>

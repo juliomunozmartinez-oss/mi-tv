@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tarea que se queda viva en segundo plano: baja una vez la lista de todas las películas y series
+  y con ella responde «Buscar» y arma el Top 10 de la semana (sin volver a descargar todo).
+-->
+<component name="IndexTask" extends="Task">
+    <interface>
+        <!-- { id, type: "search" | "top", q, movieCats: {id:true}, seriesCats: {id:true} } -->
+        <field id="request" type="assocarray" alwaysNotify="true" />
+        <!-- { id, type, ok, content (ContentNode con filas), message } -->
+        <field id="response" type="assocarray" />
+    </interface>
+    <script type="text/brightscript" uri="IndexTask.brs" />
+    <script type="text/brightscript" uri="Utils.brs" />
+    <script type="text/brightscript" uri="Http.brs" />
+</component>
