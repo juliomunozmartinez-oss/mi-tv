@@ -102,6 +102,8 @@ data class Profile(
     val avatar: String? = null,
     /** Adolescente: ve casi todo menos las categorías bloqueadas (+18, terror…). */
     val teen: Boolean = false,
+    /** Muestra la pestaña «YouTube» (abre la app oficial y con Atrás se regresa). */
+    val youtube: Boolean = true,
 ) {
     /** Infantil o adolescente: no es adulto (no pide PIN y tiene filtro). */
     val restricted: Boolean get() = kids || teen

@@ -90,6 +90,9 @@ class ProfilesEditActivity : AppCompatActivity() {
                     }
                     save(all.toMutableList().also { it[i] = next }, i, 3)
                 },
+                button("YouTube: " + if (p.youtube) "Sí" else "No") {
+                    save(all.toMutableList().also { it[i] = p.copy(youtube = !p.youtube) }, i, 4)
+                },
                 button("Borrar") { delete(i) },
             )
             list.addView(row)

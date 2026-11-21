@@ -16,7 +16,7 @@ object Profiles {
     private val defaults = listOf(
         Profile("jenny", "Jenny", kids = false, color = palette[0]),
         Profile("julio", "Julio", kids = false, color = palette[1]),
-        Profile("cam", "Cam", kids = true, color = palette[2]),
+        Profile("cam", "Cam", kids = true, color = palette[2], youtube = false),
         Profile("maju", "Maju", kids = false, color = palette[3], teen = true),
     )
 
@@ -32,6 +32,7 @@ object Profiles {
                     o.getString("id"), o.getString("name"), o.optBoolean("kids"), o.optInt("color", palette[0]),
                     o.optString("avatar").ifBlank { null },
                     o.optBoolean("teen"),
+                    o.optBoolean("youtube", !o.optBoolean("kids")),
                 )
             }
         }.getOrNull()?.takeIf { it.isNotEmpty() } ?: defaults
@@ -42,7 +43,7 @@ object Profiles {
         list.forEach {
             arr.put(
                 JSONObject().put("id", it.id).put("name", it.name).put("kids", it.kids).put("color", it.color)
-                    .put("avatar", it.avatar ?: "").put("teen", it.teen)
+                    .put("avatar", it.avatar ?: "").put("teen", it.teen).put("youtube", it.youtube)
             )
         }
         sp(ctx).edit().putString("profiles", arr.toString()).apply()

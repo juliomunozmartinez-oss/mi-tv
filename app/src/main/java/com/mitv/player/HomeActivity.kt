@@ -32,7 +32,7 @@ import java.util.Locale
 class HomeActivity : AppCompatActivity() {
 
     private enum class Tab(val label: String) {
-        HOME("Inicio"), LIVE("TV en vivo"), MOVIES("Películas"), SERIES("Series"), MYLIST("Mi lista"), SEARCH("Buscar")
+        HOME("Inicio"), LIVE("TV en vivo"), MOVIES("Películas"), SERIES("Series"), MYLIST("Mi lista"), SEARCH("Buscar"), YOUTUBE("YouTube")
     }
 
     /** El título destacado de cada pestaña (el que tiene botones «Ver» y «Más información»). */
@@ -140,6 +140,7 @@ class HomeActivity : AppCompatActivity() {
             val tv = inf.inflate(R.layout.item_season, tabsBox, false) as TextView
             tv.text = t.label
             tv.setOnClickListener { selectTab(t) }
+            if (t == Tab.YOUTUBE && !profile.youtube) tv.visibility = View.GONE
             tabsBox.addView(tv)
             tabViews += tv
         }
@@ -237,6 +238,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun selectTab(t: Tab) {
+        if (t == Tab.YOUTUBE) {
+            openYouTube()
+            return
+        }
         if (t == Tab.SEARCH) {
             startActivity(
                 android.content.Intent(this, SearchActivity::class.java).putExtra(Nav.EXTRA_PROFILE, profile.id)
@@ -258,6 +263,24 @@ class HomeActivity : AppCompatActivity() {
         markTabs()
         render()
         if (t == Tab.SEARCH) searchInput.requestFocus()
+    }
+
+    /**
+     * Abre la app oficial de YouTube. Al apretar Atrás en YouTube, Android regresa solito aquí.
+     */
+    private fun openYouTube() {
+        val pm = packageManager
+        val intent = listOf("com.google.android.youtube.tv", "com.google.android.youtube", "com.google.android.youtube.googletv")
+            .firstNotNullOfOrNull { pkg ->
+                pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg)
+            }
+        if (intent == null) {
+            android.widget.Toast.makeText(this, "YouTube no está instalado en esta tele.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            android.widget.Toast.makeText(this, "No se pudo abrir YouTube.", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     /** Enfoca el botón «Ver» del destacado, o la primera tarjeta si no hay destacado. */
@@ -631,6 +654,7 @@ class HomeActivity : AppCompatActivity() {
                     return
                 }
             }
+            Tab.YOUTUBE -> return
             Tab.SEARCH -> {
                 featured = null
                 adapter.submit(emptyList())
