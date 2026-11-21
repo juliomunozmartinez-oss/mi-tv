@@ -140,10 +140,10 @@ object Catalog {
         // Primero México, luego canales de cine, luego el resto en el orden del proveedor.
         liveCats = d.liveCats.sortedBy {
             when {
-                // «TV México», «Mexicanos»… antes que categorías que solo dicen «MX» (p. ej. deportes).
+                // Primero «TV México», «Mexicanos»…; luego las de películas (cine); luego las que solo dicen «MX» (p. ej. deportes).
                 mexicoMainRegex.containsMatchIn(it.name) -> 0
-                isMexico(it.name) -> 1
-                isCinema(it.name) -> 2
+                isCinema(it.name) -> 1
+                isMexico(it.name) -> 2
                 else -> 3
             }
         }
