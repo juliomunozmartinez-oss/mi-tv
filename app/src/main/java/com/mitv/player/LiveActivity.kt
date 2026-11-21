@@ -275,7 +275,33 @@ class LiveActivity : AppCompatActivity() {
             }
             return true
         }
+        // ◀ ▶ saltan de categoría en categoría (sin recorrer todos los canales).
+        if (inList && event.action == KeyEvent.ACTION_DOWN &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+        ) {
+            jumpCategory(if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+            return true
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Lleva al primer canal de la categoría siguiente (+1) o anterior (-1). */
+    private fun jumpCategory(dir: Int) {
+        if (focusedPos < 0) return
+        val headers = items.indices.filter { items[it] is Item.Header }
+        if (headers.isEmpty()) return
+        val current = headers.lastOrNull { it < focusedPos } ?: headers.first()
+        val firstOfCurrent = current + 1
+        val target = if (dir > 0) {
+            headers.firstOrNull { it > focusedPos } ?: return
+        } else {
+            // Si no está en el primer canal de su categoría, ◀ va al inicio de esa misma categoría.
+            if (focusedPos > firstOfCurrent) current else headers.lastOrNull { it < current } ?: return
+        }
+        val idx = target + 1
+        if (items.getOrNull(idx) !is Item.Channel) return
+        (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(target, 0)
+        list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
     }
 
     private fun toggleFavorite() {

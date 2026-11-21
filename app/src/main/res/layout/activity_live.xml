@@ -136,7 +136,7 @@
             android:layout_marginTop="16dp"
             android:background="@color/glass"
             android:padding="12dp"
-            android:text="▲ ▼  elegir canal     OK  ver en pantalla completa\nMantén OK  agregar o quitar de ⭐ Mis canales"
+            android:text="▲ ▼  elegir canal     ◀ ▶  cambiar de categoría\nOK  ver en pantalla completa     Mantén OK  ⭐ Mis canales"
             android:textColor="@color/text"
             android:textSize="16sp" />
     </LinearLayout>
