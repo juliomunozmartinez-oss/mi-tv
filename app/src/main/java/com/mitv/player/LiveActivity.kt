@@ -178,7 +178,8 @@ class LiveActivity : AppCompatActivity() {
             chNext.text = epg.getOrNull(1)?.let { "Después: ${it.title}   (${t(it.start)})" } ?: ""
             if (nowTitles[ch.id] != now.title) {
                 nowTitles[ch.id] = now.title
-                list.adapter?.notifyItemChanged(focusedPos)
+                val pos = focusedPos
+                list.post { if (!list.isComputingLayout) list.adapter?.notifyItemChanged(pos) }
             }
         }
     }

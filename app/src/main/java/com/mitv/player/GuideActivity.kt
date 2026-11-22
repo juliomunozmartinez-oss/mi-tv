@@ -159,6 +159,16 @@ class GuideActivity : AppCompatActivity() {
         selDescV.text = e.description ?: ""
     }
 
+    /** Avisar que cambió una fila sin chocar con el RecyclerView mientras acomoda o se desplaza. */
+    private fun safeNotify(pos: Int) {
+        if (pos < 0) return
+        if (list.isComputingLayout) {
+            list.post { safeNotify(pos) }
+        } else {
+            list.adapter?.notifyItemChanged(pos)
+        }
+    }
+
     private fun requestEpg(ch: LiveChannel, pos: Int) {
         if (ch.id in epg || !loading.add(ch.id)) return
         lifecycleScope.launch {
@@ -166,7 +176,7 @@ class GuideActivity : AppCompatActivity() {
             val t = now
             epg[ch.id] = result.filter { it.end > t - 24 * 3600 && it.start < t + 24 * 3600 }
             loading.remove(ch.id)
-            list.adapter?.notifyItemChanged(pos)
+            safeNotify(pos)
             if (pos == selRow) updateInfo()
         }
     }
@@ -270,8 +280,8 @@ class GuideActivity : AppCompatActivity() {
         if (target == selRow) return
         val old = selRow
         selRow = target
-        list.adapter?.notifyItemChanged(old)
-        list.adapter?.notifyItemChanged(selRow)
+        safeNotify(old)
+        safeNotify(selRow)
         list.scrollToPosition(selRow)
         updateInfo()
     }
@@ -294,7 +304,7 @@ class GuideActivity : AppCompatActivity() {
             viewStart = if (dir > 0) (start / 1800) * 1800 - 1800 else ((end + 1799) / 1800) * 1800 - viewSpan + 1800
             renderAll()
         } else {
-            list.adapter?.notifyItemChanged(selRow)
+            safeNotify(selRow)
             updateInfo()
         }
     }
@@ -336,7 +346,7 @@ class GuideActivity : AppCompatActivity() {
                     if (on) "⏰ Te aviso 2 minutos antes de «${e.title}»" else "Recordatorio quitado",
                     Toast.LENGTH_LONG,
                 ).show()
-                list.adapter?.notifyItemChanged(selRow)
+                safeNotify(selRow)
                 updateInfo()
             }
         }
