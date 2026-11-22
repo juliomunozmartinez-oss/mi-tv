@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -23,27 +24,29 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /**
- * TV en vivo «sencilla», pensada para que cualquiera la use como una tele de siempre:
- * una sola lista grande con números, el canal se ve a la derecha mientras eliges,
- * OK lo pone en pantalla completa (ahí ▲ ▼ cambian de canal) y Atrás regresa a la lista.
+ * TV en vivo en tres columnas:
+ *  1) categorías (Todos, ⭐ Favoritos, 🕘 Recientes y las del proveedor, México primero),
+ *  2) los canales de esa categoría con lo que pasan ahora y lo que sigue,
+ *  3) el canal en vivo mientras eliges.
+ * ◀ ▶ pasan entre categorías y canales; OK pone el canal en pantalla completa.
  */
 class LiveActivity : AppCompatActivity() {
 
-    private sealed class Item {
-        data class Header(val title: String) : Item()
-        /** pos = lugar en la cola de canales (su número es pos + 1). */
-        data class Channel(val ch: LiveChannel, val pos: Int, val dead: Boolean) : Item()
-    }
+    private class Group(val title: String, val channels: List<LiveChannel>, val special: Boolean = false)
 
     private lateinit var profile: Profile
     private lateinit var prefs: Prefs
     private lateinit var store: ProfileStore
+    private lateinit var catList: RecyclerView
     private lateinit var list: RecyclerView
     private lateinit var previewView: PlayerView
     private lateinit var previewMsg: TextView
@@ -52,16 +55,22 @@ class LiveActivity : AppCompatActivity() {
     private lateinit var chNext: TextView
     private lateinit var chProgress: ProgressBar
 
-    private var items: List<Item> = emptyList()
-    private var queue: List<LiveChannel> = emptyList()
-    private val nowTitles = HashMap<String, String>()
+    private var groups: List<Group> = emptyList()
+    private var groupIdx = 0
+    private var channels: List<LiveChannel> = emptyList()
+    private var dead: Set<String> = emptySet()
+    private val epg = HashMap<String, List<EpgEntry>>()
+    private val epgLoading = HashSet<String>()
+    private val epgLimiter = Semaphore(3)
     private var player: ExoPlayer? = null
     private var focusedPos = -1
     private var tunedId: String? = null
-    private var epgJob: Job? = null
+    private var infoJob: Job? = null
     private var longPressed = false
     private val handler = Handler(Looper.getMainLooper())
     private val tuneLater = Runnable { tunePreview() }
+    private var pendingGroup = -1
+    private val showGroupLater = Runnable { if (pendingGroup >= 0) showGroup(pendingGroup, focusChannel = null) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +83,7 @@ class LiveActivity : AppCompatActivity() {
         prefs = Prefs(this)
         store = ProfileStore(this, p.id)
         setContentView(R.layout.activity_live)
+        catList = findViewById(R.id.cats)
         list = findViewById(R.id.channels)
         previewView = findViewById(R.id.preview)
         previewMsg = findViewById(R.id.previewMsg)
@@ -82,6 +92,8 @@ class LiveActivity : AppCompatActivity() {
         chNext = findViewById(R.id.chNext)
         chProgress = findViewById(R.id.chProgress)
         previewView.useController = false
+        catList.layoutManager = LinearLayoutManager(this)
+        catList.itemAnimator = null
         list.layoutManager = LinearLayoutManager(this)
         list.itemAnimator = null
         findViewById<View>(R.id.btnGuide).setOnClickListener {
@@ -95,92 +107,138 @@ class LiveActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 Catalog.ensureLoaded(prefs)
-                val built = withContext(Dispatchers.Default) { build() }
-                items = built.first
-                queue = built.second
-                if (queue.isEmpty()) {
+                groups = withContext(Dispatchers.Default) { buildGroups() }
+                if (groups.none { it.channels.isNotEmpty() }) {
                     previewMsg.text = if (profile.kids) "No hay canales infantiles todavía.\nUn adulto puede elegirlos en Ajustes."
                     else "No hay canales disponibles."
                     return@launch
                 }
-                list.adapter = Adapter()
-                focusLastChannel()
+                catList.adapter = CatAdapter()
+                list.adapter = ChannelAdapter()
+                startOnLastChannel()
             } catch (e: Exception) {
                 previewMsg.text = "No se pudieron cargar los canales.\n\n${XtreamClient.friendlyError(e)}"
             }
         }
     }
 
-    /** ⭐ Mis canales arriba; luego cada categoría (México primero), con los «sin señal» al final. */
-    private fun build(): Pair<List<Item>, List<LiveChannel>> {
+    /** Todos · ⭐ Favoritos · 🕘 Recientes · categorías (México primero), con los «sin señal» al final. */
+    private fun buildGroups(): List<Group> {
         val v = CatalogView(prefs, profile)
-        val dead = DeadChannels.deadIds(this)
-        val out = ArrayList<Item>()
-        val q = ArrayList<LiveChannel>()
-        fun section(title: String, chans: List<LiveChannel>) {
-            if (chans.isEmpty()) return
-            out += Item.Header(title)
-            chans.forEach { ch ->
-                out += Item.Channel(ch, q.size, ch.id in dead)
-                q += ch
+        dead = DeadChannels.deadIds(this)
+        fun aliveFirst(l: List<LiveChannel>) = l.sortedBy { if (it.id in dead) 1 else 0 }
+        val cats = v.liveCats.map { c -> Group(c.name, aliveFirst(v.liveIn(c.id))) }.filter { it.channels.isNotEmpty() }
+        val all = cats.flatMap { it.channels }.distinctBy { it.id }
+        val favs = store.myList.filter { it.startsWith("live:") && v.canSee(it) }
+            .mapNotNull { Catalog.liveById[it.removePrefix("live:")] }
+        val recent = store.recentChannels().mapNotNull { Catalog.liveById[it] }.filter { v.canSee("live:${it.id}") }
+        return listOf(
+            Group("Todos los canales", all, special = true),
+            Group("⭐  Favoritos", favs, special = true),
+            Group("🕘  Recientes", recent, special = true),
+        ) + cats
+    }
+
+    /** Abre en la categoría del último canal visto, con ese canal seleccionado. */
+    private fun startOnLastChannel() {
+        val last = store.recentChannels().firstOrNull()
+        var g = if (last == null) -1 else groups.indexOfFirst { !it.special && it.channels.any { c -> c.id == last } }
+        if (g < 0) g = groups.indexOfFirst { !it.special && it.channels.isNotEmpty() }.takeIf { it >= 0 } ?: 0
+        showGroup(g, focusChannel = last ?: "")
+    }
+
+    private fun showGroup(g: Int, focusChannel: String?) {
+        val old = groupIdx
+        groupIdx = g
+        channels = groups[g].channels
+        catList.adapter?.notifyItemChanged(old)
+        catList.adapter?.notifyItemChanged(g)
+        list.adapter?.notifyDataSetChanged()
+        list.scrollToPosition(0)
+        if (focusChannel != null) {
+            val idx = channels.indexOfFirst { it.id == focusChannel }.coerceAtLeast(0)
+            (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 120)
+            list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
+            (catList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(g, 200)
+        }
+    }
+
+    private fun focusCategories() {
+        (catList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(groupIdx, 200)
+        catList.post { catList.layoutManager?.findViewByPosition(groupIdx)?.requestFocus() }
+    }
+
+    private fun focusChannels() {
+        if (channels.isEmpty()) return
+        val idx = focusedPos.takeIf { it in channels.indices && channels[it].id == tunedId } ?: 0
+        list.post {
+            val v = list.layoutManager?.findViewByPosition(idx)
+            if (v != null) v.requestFocus() else {
+                list.scrollToPosition(idx)
+                list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
             }
         }
-        val mine = store.myList.filter { it.startsWith("live:") && v.canSee(it) }
-            .mapNotNull { Catalog.liveById[it.removePrefix("live:")] }
-        section("⭐  Mis canales", mine)
-        v.liveCats.forEach { c ->
-            section(c.name, v.liveIn(c.id).sortedBy { if (it.id in dead) 1 else 0 })
-        }
-        return out to q
     }
 
-    /** Empieza en el último canal que se vio (o en el primero). */
-    private fun focusLastChannel() {
-        val last = store.recentChannels().firstOrNull()
-        var idx = items.indexOfFirst { it is Item.Channel && it.ch.id == last }
-        if (idx < 0) idx = items.indexOfFirst { it is Item.Channel }
-        if (idx < 0) return
-        (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 160)
-        list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
-    }
+    // ---------- Canal enfocado ----------
 
     private fun onChannelFocused(pos: Int) {
-        val item = items.getOrNull(pos) as? Item.Channel ?: return
+        val ch = channels.getOrNull(pos) ?: return
         focusedPos = pos
-        val ch = item.ch
-        chName.text = "${item.pos + 1}   ${ch.name}"
-        chNow.text = if (item.dead) "Este canal no ha tenido señal últimamente" else "Buscando programación…"
-        chNext.text = ""
-        chProgress.visibility = View.GONE
-        loadEpg(ch)
+        chName.text = "${pos + 1}   ${ch.name}"
+        showInfo(ch)
         handler.removeCallbacks(tuneLater)
         handler.postDelayed(tuneLater, 700)
     }
 
-    private fun loadEpg(ch: LiveChannel) {
-        epgJob?.cancel()
-        epgJob = lifecycleScope.launch {
-            val epg = runCatching { Catalog.epgFor(prefs.client(), ch.id) }.getOrDefault(emptyList())
-            val cur = items.getOrNull(focusedPos) as? Item.Channel ?: return@launch
-            if (cur.ch.id != ch.id) return@launch
-            val now = epg.firstOrNull()
-            if (now == null) {
-                if (!cur.dead) chNow.text = "Sin guía de programación"
-                return@launch
+    private fun showInfo(ch: LiveChannel) {
+        val list = epg[ch.id]
+        if (list == null) {
+            chNow.text = if (ch.id in dead) "Este canal no ha tenido señal últimamente" else "Buscando programación…"
+            chNext.text = ""
+            chProgress.visibility = View.GONE
+            infoJob?.cancel()
+            infoJob = lifecycleScope.launch {
+                loadEpg(ch)
+                if (channels.getOrNull(focusedPos)?.id == ch.id) showInfo(ch)
             }
-            val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale("es", "MX"))
-            fun t(s: Long) = fmt.format(java.util.Date(s * 1000))
-            chNow.text = "Ahora: ${now.title}   (${t(now.start)} – ${t(now.end)})"
-            val total = (now.end - now.start).coerceAtLeast(1)
-            val done = (System.currentTimeMillis() / 1000 - now.start).coerceIn(0, total)
-            chProgress.progress = (done * 1000 / total).toInt()
-            chProgress.visibility = View.VISIBLE
-            chNext.text = epg.getOrNull(1)?.let { "Después: ${it.title}   (${t(it.start)})" } ?: ""
-            if (nowTitles[ch.id] != now.title) {
-                nowTitles[ch.id] = now.title
-                val pos = focusedPos
-                list.post { if (!list.isComputingLayout) list.adapter?.notifyItemChanged(pos) }
-            }
+            return
+        }
+        val now = list.firstOrNull()
+        if (now == null) {
+            chNow.text = if (ch.id in dead) "Este canal no ha tenido señal últimamente" else "Sin guía de programación"
+            chNext.text = ""
+            chProgress.visibility = View.GONE
+            return
+        }
+        chNow.text = "Ahora: ${now.title}   (${t(now.start)} – ${t(now.end)})"
+        chProgress.progress = progressOf(now)
+        chProgress.visibility = View.VISIBLE
+        chNext.text = list.getOrNull(1)?.let { "Después: ${it.title}   (${t(it.start)})" } ?: ""
+    }
+
+    private val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale("es", "MX"))
+    private fun t(s: Long) = timeFmt.format(java.util.Date(s * 1000))
+    private fun progressOf(e: EpgEntry): Int {
+        val total = (e.end - e.start).coerceAtLeast(1)
+        val done = (System.currentTimeMillis() / 1000 - e.start).coerceIn(0, total)
+        return (done * 1000 / total).toInt()
+    }
+
+    private suspend fun loadEpg(ch: LiveChannel) {
+        if (ch.id in epg) return
+        val r = runCatching { epgLimiter.withPermit { Catalog.epgFor(prefs.client(), ch.id) } }.getOrDefault(emptyList())
+        epg[ch.id] = r
+    }
+
+    /** Pide la programación de un canal que apareció en la lista y redibuja su tarjeta al llegar. */
+    private fun requestRowEpg(ch: LiveChannel) {
+        if (ch.id in epg || !epgLoading.add(ch.id)) return
+        lifecycleScope.launch {
+            loadEpg(ch)
+            epgLoading.remove(ch.id)
+            val pos = channels.indexOfFirst { it.id == ch.id }
+            if (pos >= 0) list.post { if (!list.isComputingLayout) list.adapter?.notifyItemChanged(pos) }
         }
     }
 
@@ -215,13 +273,13 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun tunePreview() {
-        val item = items.getOrNull(focusedPos) as? Item.Channel ?: return
-        if (tunedId == item.ch.id && player != null) return
-        tunedId = item.ch.id
+        val ch = channels.getOrNull(focusedPos) ?: return
+        if (tunedId == ch.id && player != null) return
+        tunedId = ch.id
         previewMsg.text = "Cargando…"
         previewMsg.visibility = View.VISIBLE
         val p = ensurePlayer()
-        p.setMediaItem(MediaItem.fromUri(prefs.client().liveUrl(item.ch.id, "ts")))
+        p.setMediaItem(MediaItem.fromUri(prefs.client().liveUrl(ch.id, "ts")))
         p.prepare()
         p.playWhenReady = true
     }
@@ -235,9 +293,11 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun openFullScreen() {
-        val item = items.getOrNull(focusedPos) as? Item.Channel ?: return
+        if (focusedPos !in channels.indices) return
+        val pos = focusedPos
         releasePlayer()
-        Nav.playLive(this, profile, queue, item.pos)
+        // En pantalla completa, ▲ ▼ cambian de canal dentro de esta misma categoría.
+        Nav.playLive(this, profile, channels, pos)
     }
 
     override fun onPause() {
@@ -247,13 +307,15 @@ class LiveActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!::list.isInitialized || items.isEmpty()) return
+        if (!::list.isInitialized || groups.isEmpty()) return
         // Al volver de pantalla completa: quedarse en el canal que se estaba viendo.
         val last = store.recentChannels().firstOrNull()
-        val idx = items.indexOfFirst { it is Item.Channel && it.ch.id == last }
-        if (idx >= 0 && idx != focusedPos) {
-            (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 160)
+        val idx = channels.indexOfFirst { it.id == last }
+        if (idx >= 0) {
+            focusedPos = idx
+            (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 120)
             list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
+            handler.postDelayed(tuneLater, 400)
         } else if (focusedPos >= 0) {
             handler.postDelayed(tuneLater, 400)
         }
@@ -262,111 +324,165 @@ class LiveActivity : AppCompatActivity() {
     // ---------- Teclas ----------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val focus = currentFocus
+        val inChannels = focus?.parent === list
+        val inCats = focus?.parent === catList
+        val down = event.action == KeyEvent.ACTION_DOWN
         val center = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
-        val inList = currentFocus?.parent === list
-        if (center && inList) {
-            // Mantener OK = agregar o quitar de ⭐ Mis canales.
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 1) {
-                longPressed = true
-                toggleFavorite()
+        if (inChannels) {
+            if (center) {
+                // Mantener OK = agregar o quitar de ⭐ Favoritos.
+                if (down && event.repeatCount == 1) {
+                    longPressed = true
+                    toggleFavorite()
+                    return true
+                }
+                if (event.action == KeyEvent.ACTION_UP) {
+                    if (longPressed) longPressed = false else openFullScreen()
+                }
                 return true
             }
-            if (event.action == KeyEvent.ACTION_UP) {
-                if (longPressed) longPressed = false else openFullScreen()
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (down) focusCategories()
+                return true
             }
-            return true
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) return true
         }
-        // ◀ ▶ saltan de categoría en categoría (sin recorrer todos los canales).
-        if (inList && event.action == KeyEvent.ACTION_DOWN &&
-            (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-        ) {
-            jumpCategory(if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
-            return true
+        if (inCats && down) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || center) {
+                handler.removeCallbacks(showGroupLater)
+                if (pendingGroup >= 0 && pendingGroup != groupIdx) showGroup(pendingGroup, focusChannel = null)
+                if (channels.isEmpty()) return true
+                focusedPos = 0
+                tunedId = null
+                list.scrollToPosition(0)
+                list.post { list.layoutManager?.findViewByPosition(0)?.requestFocus() }
+                return true
+            }
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return true
         }
+        if (inCats && center) return true
         return super.dispatchKeyEvent(event)
     }
 
-    /** Lleva al primer canal de la categoría siguiente (+1) o anterior (-1). */
-    private fun jumpCategory(dir: Int) {
-        if (focusedPos < 0) return
-        val headers = items.indices.filter { items[it] is Item.Header }
-        if (headers.isEmpty()) return
-        val current = headers.lastOrNull { it < focusedPos } ?: headers.first()
-        val firstOfCurrent = current + 1
-        val target = if (dir > 0) {
-            headers.firstOrNull { it > focusedPos } ?: return
-        } else {
-            // Si no está en el primer canal de su categoría, ◀ va al inicio de esa misma categoría.
-            if (focusedPos > firstOfCurrent) current else headers.lastOrNull { it < current } ?: return
-        }
-        val idx = target + 1
-        if (items.getOrNull(idx) !is Item.Channel) return
-        (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(target, 0)
-        list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
+    private fun onCategoryFocused(g: Int) {
+        if (g == groupIdx) return
+        // Cambiar la lista de canales un instante después, para que bajar rápido por las categorías no trabe.
+        pendingGroup = g
+        handler.removeCallbacks(showGroupLater)
+        handler.postDelayed(showGroupLater, 250)
     }
 
     private fun toggleFavorite() {
-        val item = items.getOrNull(focusedPos) as? Item.Channel ?: return
-        val added = store.toggleList("live:${item.ch.id}")
+        val ch = channels.getOrNull(focusedPos) ?: return
+        val added = store.toggleList("live:${ch.id}")
         Toast.makeText(
             this,
-            if (added) "⭐ ${item.ch.name} agregado a Mis canales" else "${item.ch.name} quitado de Mis canales",
+            if (added) "⭐ ${ch.name} agregado a Favoritos" else "${ch.name} quitado de Favoritos",
             Toast.LENGTH_SHORT,
         ).show()
-        val keepId = item.ch.id
+        val pos = focusedPos
         lifecycleScope.launch {
-            val built = withContext(Dispatchers.Default) { build() }
-            items = built.first
-            queue = built.second
+            val newGroups = withContext(Dispatchers.Default) { buildGroups() }
+            val title = groups[groupIdx].title
+            groups = newGroups
+            catList.adapter?.notifyDataSetChanged()
+            val g = groups.indexOfFirst { it.title == title }.coerceAtLeast(0)
+            groupIdx = g
+            channels = groups[g].channels
             list.adapter?.notifyDataSetChanged()
-            // Seguir en el mismo canal (en su categoría, no en la copia de Mis canales).
-            val idx = items.indexOfLast { it is Item.Channel && it.ch.id == keepId }
+            val idx = channels.indexOfFirst { it.id == ch.id }.takeIf { it >= 0 } ?: pos.coerceAtMost(channels.size - 1)
             if (idx >= 0) {
                 focusedPos = idx
-                (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 160)
                 list.post { list.layoutManager?.findViewByPosition(idx)?.requestFocus() }
+            } else {
+                focusCategories()
             }
         }
     }
 
-    // ---------- Lista ----------
+    // ---------- Listas ----------
 
-    private inner class Adapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        override fun getItemViewType(position: Int) = if (items[position] is Item.Header) 0 else 1
-
+    private inner class CatAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            val layout = if (viewType == 0) R.layout.item_live_header else R.layout.item_live_channel
-            val v = LayoutInflater.from(parent.context).inflate(layout, parent, false)
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_live_cat, parent, false)
             val vh = object : RecyclerView.ViewHolder(v) {}
-            if (viewType == 1) {
-                v.setOnFocusChangeListener { _, has ->
-                    val pos = vh.bindingAdapterPosition
-                    if (has && pos != RecyclerView.NO_POSITION) onChannelFocused(pos)
-                }
+            v.setOnFocusChangeListener { _, has ->
+                val pos = vh.bindingAdapterPosition
+                if (has && pos != RecyclerView.NO_POSITION) onCategoryFocused(pos)
             }
             return vh
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            when (val item = items[position]) {
-                is Item.Header -> (holder.itemView as TextView).text = item.title
-                is Item.Channel -> {
-                    val v = holder.itemView
-                    val fav = store.inList("live:${item.ch.id}")
-                    v.findViewById<TextView>(R.id.num).text = (item.pos + 1).toString()
-                    v.findViewById<TextView>(R.id.name).text = (if (fav) "⭐ " else "") + item.ch.name
-                    v.findViewById<TextView>(R.id.sub).apply {
-                        text = when {
-                            item.dead -> "Sin señal"
-                            else -> nowTitles[item.ch.id]?.let { "Ahora: $it" } ?: ""
-                        }
-                        visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
-                    }
-                    v.alpha = if (item.dead) 0.5f else 1f
-                }
-            }
+            val g = groups[position]
+            val v = holder.itemView
+            v.findViewById<TextView>(R.id.catName).text = g.title
+            v.findViewById<TextView>(R.id.catCount).text = g.channels.size.toString()
+            v.isActivated = position == groupIdx
         }
 
-        override fun getItemCount() = items.size
+        override fun getItemCount() = groups.size
+    }
+
+    private inner class ChannelAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_live_channel, parent, false)
+            val vh = object : RecyclerView.ViewHolder(v) {}
+            v.setOnFocusChangeListener { _, has ->
+                val pos = vh.bindingAdapterPosition
+                if (has && pos != RecyclerView.NO_POSITION) onChannelFocused(pos)
+            }
+            return vh
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val ch = channels[position]
+            val v = holder.itemView
+            val fav = store.inList("live:${ch.id}")
+            val num = v.findViewById<TextView>(R.id.num)
+            val logo = v.findViewById<ImageView>(R.id.logo)
+            num.text = "TV"
+            num.visibility = View.VISIBLE
+            logo.setImageDrawable(null)
+            if (!ch.icon.isNullOrBlank()) {
+                logo.load(ch.icon) {
+                    listener(onSuccess = { _, _ -> num.visibility = View.INVISIBLE })
+                }
+            }
+            v.findViewById<TextView>(R.id.name).text = "${position + 1}  " + (if (fav) "⭐ " else "") + ch.name
+            val nowV = v.findViewById<TextView>(R.id.now)
+            val nextV = v.findViewById<TextView>(R.id.next)
+            val prog = v.findViewById<ProgressBar>(R.id.progress)
+            val e = epg[ch.id]
+            val now = e?.firstOrNull()
+            when {
+                ch.id in dead -> {
+                    nowV.text = "Sin señal"
+                    nextV.text = ""
+                    prog.visibility = View.GONE
+                }
+                e == null -> {
+                    nowV.text = "…"
+                    nextV.text = ""
+                    prog.visibility = View.GONE
+                    requestRowEpg(ch)
+                }
+                now == null -> {
+                    nowV.text = "Sin información"
+                    nextV.text = ""
+                    prog.visibility = View.GONE
+                }
+                else -> {
+                    nowV.text = "${t(now.start)} – ${t(now.end)}   ${now.title}"
+                    prog.progress = progressOf(now)
+                    prog.visibility = View.VISIBLE
+                    nextV.text = e.getOrNull(1)?.let { "${t(it.start)}  ${it.title}" } ?: ""
+                }
+            }
+            v.alpha = if (ch.id in dead) 0.5f else 1f
+        }
+
+        override fun getItemCount() = channels.size
     }
 }
