@@ -45,6 +45,21 @@
                 android:text="📅 Guía"
                 android:textColor="@color/text"
                 android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/btnLists"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_item"
+                android:focusable="true"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="☑ Listas"
+                android:textColor="@color/text"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView

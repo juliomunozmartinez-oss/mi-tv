@@ -19,10 +19,17 @@ class KidsActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TEEN = "teen"
+        /** Elegir qué categorías de TV en vivo se muestran (perfiles de adultos y adolescentes). */
+        const val EXTRA_LIVE = "live"
     }
 
     private var teen = false
-    private fun current() = if (teen) prefs.teenBlocked else prefs.kidsCategories
+    private var liveMode = false
+    private fun current(): Set<String> = when {
+        liveMode -> Catalog.liveCats.map { it.key }.toSet() - prefs.hiddenCategories
+        teen -> prefs.teenBlocked
+        else -> prefs.kidsCategories
+    }
 
     private sealed class Item {
         data class Header(val text: String) : Item()
@@ -39,7 +46,13 @@ class KidsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_kids)
         prefs = Prefs(this)
         teen = intent.getBooleanExtra(EXTRA_TEEN, false)
-        if (teen) {
+        liveMode = intent.getBooleanExtra(EXTRA_LIVE, false)
+        if (liveMode) {
+            findViewById<TextView>(R.id.title).text = "Categorías de TV en vivo"
+            findViewById<TextView>(R.id.subtitle).text =
+                "Lo marcado es lo que se ve en TV en vivo. Desmarca las que no quieras ver. OK para marcar o desmarcar."
+            findViewById<TextView>(R.id.btnAuto).text = "Marcar / quitar todas"
+        } else if (teen) {
             findViewById<TextView>(R.id.title).text = "Bloqueadas para adolescentes"
             findViewById<TextView>(R.id.subtitle).text =
                 "Lo marcado NO lo ven los perfiles adolescentes. Todo lo demás sí. OK para marcar o desmarcar."
@@ -49,6 +62,15 @@ class KidsActivity : AppCompatActivity() {
         list.itemAnimator = null
 
         findViewById<TextView>(R.id.btnAuto).setOnClickListener {
+            if (liveMode) {
+                val keys = Catalog.liveCats.map { it.key }.toSet()
+                val allShown = keys.none { it in prefs.hiddenCategories }
+                prefs.hiddenCategories = if (allShown) prefs.hiddenCategories + keys else prefs.hiddenCategories - keys
+                selected = current()
+                list.adapter?.notifyDataSetChanged()
+                Toast.makeText(this, if (allShown) "Se quitaron todas" else "Se marcaron todas", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (teen) prefs.teenBlocked = Catalog.autoTeenBlocked()
             else prefs.kidsCategories = Catalog.autoKidsCategories()
             selected = current()
@@ -76,9 +98,15 @@ class KidsActivity : AppCompatActivity() {
             // Primero las marcadas, para encontrarlas fácil.
             cats.sortedBy { if (it.key in selected) 0 else 1 }.forEach { out += Item.Check(it) }
         }
-        section("TV EN VIVO", Catalog.liveCats)
-        section("PELÍCULAS", Catalog.vodCats)
-        section("SERIES", Catalog.seriesCats)
+        if (liveMode) {
+            // En el mismo orden en que salen en TV en vivo.
+            out += Item.Header("TV EN VIVO")
+            Catalog.ordered(Kind.LIVE, prefs).forEach { out += Item.Check(it) }
+        } else {
+            section("TV EN VIVO", Catalog.liveCats)
+            section("PELÍCULAS", Catalog.vodCats)
+            section("SERIES", Catalog.seriesCats)
+        }
         items = out
         list.adapter = Adapter()
         list.post { list.layoutManager?.findViewByPosition(1)?.requestFocus() }
@@ -102,7 +130,8 @@ class KidsActivity : AppCompatActivity() {
                     tv.text = (if (on) "☑  " else "☐  ") + item.category.name
                     tv.alpha = if (on) 1f else 0.7f
                     tv.setOnClickListener {
-                        if (teen) prefs.toggleTeenBlocked(item.category.key)
+                        if (liveMode) prefs.toggleHidden(item.category.key)
+                        else if (teen) prefs.toggleTeenBlocked(item.category.key)
                         else prefs.toggleKidsCategory(item.category.key)
                         selected = current()
                         notifyItemChanged(holder.bindingAdapterPosition)

@@ -99,10 +99,19 @@ class LiveActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnGuide).setOnClickListener {
             startActivity(Intent(this, GuideActivity::class.java).putExtra(Nav.EXTRA_PROFILE, profile.id))
         }
+        val lists = findViewById<View>(R.id.btnLists)
+        // Los infantiles ya tienen sus propias categorías (las elige un adulto en Ajustes).
+        if (profile.kids) lists.visibility = View.GONE
+        lists.setOnClickListener {
+            startActivity(Intent(this, KidsActivity::class.java).putExtra(KidsActivity.EXTRA_LIVE, true))
+        }
         load()
     }
 
+    private var shownHidden: Set<String> = emptySet()
+
     private fun load() {
+        shownHidden = prefs.hiddenCategories
         previewMsg.text = "Cargando canales…"
         lifecycleScope.launch {
             try {
@@ -307,7 +316,13 @@ class LiveActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!::list.isInitialized || groups.isEmpty()) return
+        if (!::list.isInitialized) return
+        // Si se cambiaron las listas visibles, volver a armar las categorías.
+        if (prefs.hiddenCategories != shownHidden) {
+            load()
+            return
+        }
+        if (groups.isEmpty()) return
         // Al volver de pantalla completa: quedarse en el canal que se estaba viendo.
         val last = store.recentChannels().firstOrNull()
         val idx = channels.indexOfFirst { it.id == last }

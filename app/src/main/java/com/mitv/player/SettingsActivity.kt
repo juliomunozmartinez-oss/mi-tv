@@ -138,6 +138,15 @@ class SettingsActivity : AppCompatActivity() {
                 )
             }
         }
+        findViewById<TextView>(R.id.btnLiveLists).setOnClickListener {
+            if (!prefs.isConfigured) {
+                show("Primero guarda tu servidor, usuario y contraseña.", ok = false)
+            } else {
+                startActivity(
+                    android.content.Intent(this, KidsActivity::class.java).putExtra(KidsActivity.EXTRA_LIVE, true)
+                )
+            }
+        }
         btnPin.setOnClickListener {
             if (prefs.pinEnabled) {
                 prefs.pinEnabled = false
